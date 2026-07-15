@@ -486,7 +486,7 @@ h2 {
 }
 
 .show-card {
-  touch-action: none;
+  touch-action: pan-y;
   transition: border-color 0.16s ease, opacity 0.16s ease;
   user-select: none;
   -webkit-user-select: none;
@@ -494,7 +494,7 @@ h2 {
 }
 
 .show-card[data-zone="ranked"] {
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .show-card.is-dragging {

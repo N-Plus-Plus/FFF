@@ -4,6 +4,8 @@ import { createMetadataProvider, normalizeProviderTitle, parseImdbId } from "./p
 
 const BOARD_FALLBACK_POLL_MS = 60000;
 const SAVE_DEBOUNCE_MS = 650;
+const DRAG_HOLD_DELAY_MS = 400;
+const DRAG_CANCEL_MOVE_PX = 8;
 const REMINDER_DISMISSED_KEY = "fff.unrankedReminder.dismissed";
 
 const dom = {
@@ -44,6 +46,13 @@ const appState = {
   searchLoading: false,
   board: { revision: 0, updatedAt: "", entries: [] },
   activeTab: "add",
+  backgroundAuditQueued: false,
+  backgroundAuditInFlight: false,
+  pendingDragCard: null,
+  pendingDragPointerId: null,
+  pendingDragTimer: 0,
+  pendingDragStartX: 0,
+  pendingDragStartY: 0,
   draggingShowId: null,
   draggingSourceZone: "",
   dragRankedInsertIndex: null,
@@ -145,6 +154,7 @@ async function loadApp() {
   appState.board = data.board;
   appState.saveStatus = "saved";
   render();
+  queueBackgroundAudit();
 }
 
 function render() {
@@ -288,6 +298,79 @@ async function reloadOrderAndCatalogue() {
   appState.removedShows = catalogue.removedShows;
   appState.ranked = order.ranked;
   appState.unranked = order.unranked;
+}
+
+function queueBackgroundAudit() {
+  if (appState.demoMode || appState.backgroundAuditQueued || appState.backgroundAuditInFlight) {
+    return;
+  }
+  appState.backgroundAuditQueued = true;
+  window.setTimeout(() => {
+    auditRenderedBackgrounds().catch(() => {
+      appState.backgroundAuditQueued = false;
+      appState.backgroundAuditInFlight = false;
+    });
+  }, 0);
+}
+
+async function auditRenderedBackgrounds() {
+  if (!metadataProvider.verifyBackgrounds) {
+    appState.backgroundAuditQueued = false;
+    return;
+  }
+  const images = Array.from(document.querySelectorAll(".card-background img[data-bg-show-id][data-bg-imdb-id]"));
+  const loaded = await Promise.all(images.map(resolveBackgroundImageAuditItem));
+  const unique = new Map();
+  loaded.filter(Boolean).forEach((item) => {
+    if (!unique.has(item.showId)) {
+      unique.set(item.showId, item);
+    }
+  });
+  const items = Array.from(unique.values());
+  appState.backgroundAuditQueued = false;
+  if (!items.length) {
+    return;
+  }
+
+  appState.backgroundAuditInFlight = true;
+  try {
+    const result = await metadataProvider.verifyBackgrounds(items);
+    if (result?.updatedCount > 0) {
+      await reloadOrderAndCatalogue();
+      if (appState.activeTab === "board") {
+        await refreshBoard("Background metadata refreshed");
+      }
+      render();
+    }
+  } finally {
+    appState.backgroundAuditInFlight = false;
+  }
+}
+
+function resolveBackgroundImageAuditItem(image) {
+  return new Promise((resolve) => {
+    const finish = () => {
+      const showId = image.dataset.bgShowId || "";
+      const imdbId = image.dataset.bgImdbId || "";
+      if (!showId || !imdbId || !image.currentSrc) {
+        resolve(null);
+        return;
+      }
+      resolve({
+        showId,
+        imdbId,
+        backgroundUrl: image.currentSrc,
+        width: image.naturalWidth || 0,
+        height: image.naturalHeight || 0
+      });
+    };
+    if (image.complete) {
+      finish();
+      return;
+    }
+    image.addEventListener("load", finish, { once: true });
+    image.addEventListener("error", finish, { once: true });
+  });
 }
 
 function renderSearchResults() {
@@ -460,27 +543,100 @@ function beginDrag(event) {
   if (event.target.closest("button, a, input, select, textarea")) {
     return;
   }
+  if (event.button !== undefined && event.button !== 0) {
+    return;
+  }
   const card = event.currentTarget;
+  clearPendingDrag();
+  appState.pendingDragCard = card;
+  appState.pendingDragPointerId = event.pointerId;
+  appState.pendingDragStartX = event.clientX;
+  appState.pendingDragStartY = event.clientY;
+  appState.pendingDragTimer = window.setTimeout(() => {
+    startDrag(card, event.pointerId, event.clientX, event.clientY);
+  }, DRAG_HOLD_DELAY_MS);
+  document.addEventListener("pointermove", pendingDragMove);
+  document.addEventListener("pointerup", finishPendingDrag, { once: true });
+  document.addEventListener("pointercancel", cancelPendingDrag, { once: true });
+}
+
+function startDrag(card, pointerId, x, y) {
+  clearPendingDragTimer();
   appState.draggingShowId = card.dataset.showId;
   appState.draggingSourceZone = card.dataset.zone || "";
   appState.dragRankedInsertIndex = appState.draggingSourceZone === "ranked"
     ? appState.ranked.findIndex((show) => show.id === appState.draggingShowId)
     : null;
-  appState.dragStartX = event.clientX;
-  appState.dragStartY = event.clientY;
+  appState.dragStartX = x;
+  appState.dragStartY = y;
   appState.dragMoved = false;
-  card.setPointerCapture(event.pointerId);
+  card.setPointerCapture(pointerId);
   card.classList.add("is-dragging");
   document.addEventListener("pointermove", dragMove);
   document.addEventListener("pointerup", endDrag, { once: true });
   document.addEventListener("pointercancel", cancelDrag, { once: true });
+  document.addEventListener("touchmove", preventActiveDragTouchScroll, { passive: false });
+}
+
+function pendingDragMove(event) {
+  if (event.pointerId !== appState.pendingDragPointerId) {
+    return;
+  }
+  const distance = Math.hypot(event.clientX - appState.pendingDragStartX, event.clientY - appState.pendingDragStartY);
+  if (distance > DRAG_CANCEL_MOVE_PX) {
+    cancelPendingDrag();
+  }
+}
+
+function finishPendingDrag() {
+  if (appState.draggingShowId) {
+    return;
+  }
+  const card = appState.pendingDragCard;
+  const sourceZone = card?.dataset.zone || "";
+  const showId = card?.dataset.showId;
+  clearPendingDrag();
+  if (sourceZone === "unranked" && showId) {
+    rankShow(showId);
+  }
+}
+
+function cancelPendingDrag() {
+  clearPendingDrag();
+}
+
+function clearPendingDrag() {
+  clearPendingDragTimer();
+  document.removeEventListener("pointermove", pendingDragMove);
+  document.removeEventListener("pointerup", finishPendingDrag);
+  document.removeEventListener("pointercancel", cancelPendingDrag);
+  appState.pendingDragCard = null;
+  appState.pendingDragPointerId = null;
+  appState.pendingDragStartX = 0;
+  appState.pendingDragStartY = 0;
+}
+
+function clearPendingDragTimer() {
+  if (appState.pendingDragTimer) {
+    window.clearTimeout(appState.pendingDragTimer);
+    appState.pendingDragTimer = 0;
+  }
+}
+
+function preventActiveDragTouchScroll(event) {
+  if (appState.draggingShowId) {
+    event.preventDefault();
+  }
 }
 
 function dragMove(event) {
   if (!appState.draggingShowId) {
     return;
   }
-  if (Math.hypot(event.clientX - appState.dragStartX, event.clientY - appState.dragStartY) > 8) {
+  if (event.pointerId !== appState.pendingDragPointerId) {
+    return;
+  }
+  if (Math.hypot(event.clientX - appState.dragStartX, event.clientY - appState.dragStartY) > DRAG_CANCEL_MOVE_PX) {
     appState.dragMoved = true;
   }
   const nextIndex = rankedInsertIndexFromPoint(event.clientX, event.clientY);
@@ -540,18 +696,16 @@ function commitRankedDrag() {
 }
 
 function endDrag() {
+  clearPendingDrag();
   clearDragListeners();
   updateOrderWithMotion(() => {
-    if (appState.draggingSourceZone === "unranked" && !appState.dragMoved && appState.dragRankedInsertIndex === null) {
-      rankShow(appState.draggingShowId, { render: false });
-    } else {
-      commitRankedDrag();
-    }
+    commitRankedDrag();
     clearDragState();
   });
 }
 
 function cancelDrag() {
+  clearPendingDrag();
   clearDragListeners();
   clearDragState();
   renderOrder();
@@ -561,6 +715,7 @@ function clearDragListeners() {
   document.removeEventListener("pointermove", dragMove);
   document.removeEventListener("pointerup", endDrag);
   document.removeEventListener("pointercancel", cancelDrag);
+  document.removeEventListener("touchmove", preventActiveDragTouchScroll);
 }
 
 function clearDragState() {
@@ -836,19 +991,33 @@ function titleMarkup(show) {
 
 function metadataMarkup(show) {
   const rows = [];
-  if (show.releaseYear) {
-    rows.push(show.releaseYear);
+  const yearRange = formatYearRange(show);
+  if (yearRange) {
+    rows.push(yearRange);
   }
   if (show.totalEpisodeCount) {
     rows.push(formatEpisodeCount(show));
   }
   if (show.totalRuntimeMinutes) {
-    rows.push(`Runtime: ${formatRuntime(show.totalRuntimeMinutes)}`);
+    rows.push(`Total Runtime: ${formatRuntime(show.totalRuntimeMinutes)}`);
   }
   if (!rows.length) {
     rows.push(formatShowSubtitle(show));
   }
   return rows.map((row) => `<p class="show-subtitle">${escapeHtml(row)}</p>`).join("");
+}
+
+function formatYearRange(show) {
+  const startYear = Number(show.releaseYear);
+  if (!Number.isFinite(startYear) || startYear <= 0) {
+    return "";
+  }
+  const status = String(show.seriesStatus || "").trim().toLowerCase();
+  const endYear = Number(show.endYear ?? show.endedYear ?? show.finalYear ?? show.metadata?.end_year ?? show.metadata?.endYear ?? show.metadata?.tvmaze_end_year);
+  if (status === "ended" && Number.isFinite(endYear) && endYear > 0 && endYear !== startYear) {
+    return `${startYear}-${endYear}`;
+  }
+  return String(startYear);
 }
 
 function formatEpisodeCount(show) {
@@ -883,9 +1052,11 @@ function posterMarkup(show) {
 }
 
 function backgroundMarkup(show) {
-  const url = show.backgroundUrl || show.background_url || show.bannerUrl || show.banner_url || show.backdropUrl || show.backdrop_url || show.posterUrl || show.poster_url || "";
+  const url = show.backgroundUrl || show.background_url || show.bannerUrl || show.banner_url || show.backdropUrl || show.backdrop_url || "";
   if (url) {
-    return `<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false"></div>`;
+    const showId = show.id || show.showId || show.show_id || "";
+    const imdbId = show.imdbId || show.imdb_id || "";
+    return `<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false" data-bg-show-id="${escapeAttribute(showId)}" data-bg-imdb-id="${escapeAttribute(imdbId)}"></div>`;
   }
   return '<div class="card-background">TV</div>';
 }

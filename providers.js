@@ -3,8 +3,10 @@ const DEMO_RESULTS = [
     imdb_id: "tt14452776",
     title: "The Bear",
     release_year: 2022,
+    end_year: null,
     title_type: "tvSeries",
     series_status: "Returning Series",
+    total_season_count: 3,
     total_episode_count: 28,
     total_runtime_minutes: null,
     poster_url: "",
@@ -20,8 +22,10 @@ const DEMO_RESULTS = [
     imdb_id: "tt0903747",
     title: "Breaking Bad",
     release_year: 2008,
+    end_year: 2013,
     title_type: "tvSeries",
     series_status: "Ended",
+    total_season_count: 5,
     total_episode_count: 62,
     total_runtime_minutes: null,
     poster_url: "",
@@ -37,8 +41,10 @@ const DEMO_RESULTS = [
     imdb_id: "tt2861424",
     title: "Rick and Morty",
     release_year: 2013,
+    end_year: null,
     title_type: "tvSeries",
     series_status: "Returning Series",
+    total_season_count: 7,
     total_episode_count: null,
     total_runtime_minutes: null,
     poster_url: "",
@@ -99,6 +105,9 @@ function createEdgeImdbAdapter(config, token) {
     async enroll(imdbId) {
       const data = await requestImdb(config, token, { action: "enroll", imdbId });
       return data.show || data.result || null;
+    },
+    async verifyBackgrounds(items) {
+      return requestImdb(config, token, { action: "verify-backgrounds", items });
     }
   };
 }
@@ -118,6 +127,9 @@ function createDemoImdbAdapter() {
     async enroll(imdbId) {
       const result = DEMO_RESULTS.find((show) => show.imdb_id === imdbId);
       return result ? normalizeProviderTitle(result) : null;
+    },
+    async verifyBackgrounds() {
+      return { updatedCount: 0, updated: [] };
     }
   };
 }
@@ -179,6 +191,7 @@ export function normalizeProviderTitle(input) {
     imdbId: input.imdb_id || input.imdbId || "",
     title: input.title || "",
     releaseYear: input.release_year || input.releaseYear || null,
+    endYear: input.end_year || input.endYear || input.ended_year || input.endedYear || input.final_year || input.finalYear || input.metadata?.end_year || input.metadata?.endYear || input.metadata?.tvmaze_end_year || null,
     titleType,
     seriesStatus: input.series_status || input.seriesStatus || null,
     totalSeasonCount: input.total_season_count ?? input.totalSeasonCount ?? input.season_count ?? input.seasonCount ?? input.metadata?.total_season_count ?? input.metadata?.totalSeasonCount ?? input.metadata?.tvmaze_season_count ?? null,
@@ -213,6 +226,7 @@ export function mergePrimaryAndTvdbMetadata(primaryInput, tvdbInput = null, reta
     imdbId: primary.imdbId,
     title: primary.title || retained.title,
     releaseYear: firstPresent(primary.releaseYear, retained.releaseYear),
+    endYear: firstPresent(primary.endYear, tvdb?.endYear, retained.endYear),
     titleType: firstPresent(primary.titleType, retained.titleType),
     seriesStatus: firstPresent(primary.seriesStatus, tvdb?.seriesStatus, retained.seriesStatus),
     totalSeasonCount: firstPresent(primary.totalSeasonCount, tvdb?.totalSeasonCount, retained.totalSeasonCount),
@@ -233,6 +247,7 @@ export function mergePrimaryAndTvdbMetadata(primaryInput, tvdbInput = null, reta
       provenance: {
         canonical: "imdb",
         title: "primary",
+        endYear: primary.endYear != null ? "primary" : tvdb?.endYear != null ? "tvdb" : retained.endYear != null ? "retained" : null,
         seriesStatus: primary.seriesStatus ? "primary" : tvdb?.seriesStatus ? "tvdb" : retained.seriesStatus ? "retained" : null,
         totalSeasonCount: primary.totalSeasonCount != null ? "primary" : tvdb?.totalSeasonCount != null ? "tvdb" : retained.totalSeasonCount != null ? "retained" : null,
         totalEpisodeCount: primary.totalEpisodeCount != null ? "primary" : tvdb?.totalEpisodeCount != null ? "tvdb" : retained.totalEpisodeCount != null ? "retained" : null,
@@ -257,6 +272,7 @@ export function normalizeTvdbFallback(input, canonicalImdbId) {
   return {
     imdbId,
     title: input.title || input.name || "",
+    endYear: input.end_year || input.endYear || input.ended_year || input.endedYear || input.ended || null,
     seriesStatus: input.series_status || input.seriesStatus || input.status || null,
     totalSeasonCount: input.total_season_count ?? input.totalSeasonCount ?? input.season_count ?? input.seasonCount ?? null,
     totalEpisodeCount: input.total_episode_count ?? input.totalEpisodeCount ?? input.episode_count ?? input.episodeCount ?? null,

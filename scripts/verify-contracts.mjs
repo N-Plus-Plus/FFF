@@ -55,9 +55,11 @@ globalThis.window = {
 const rootFiles = {
   app: await readFile(new URL("../app.js", import.meta.url), "utf8"),
   index: await readFile(new URL("../index.html", import.meta.url), "utf8"),
+  css: await readFile(new URL("../style.css", import.meta.url), "utf8"),
   store: await readFile(new URL("../store.js", import.meta.url), "utf8"),
   providers: await readFile(new URL("../providers.js", import.meta.url), "utf8"),
   migration: await readFile(new URL("../supabase/migrations/20260715000400_sequential_irv_lifecycle_privacy.sql", import.meta.url), "utf8"),
+  cardMigration: await readFile(new URL("../supabase/migrations/20260716000100_card_metadata_background_audit.sql", import.meta.url), "utf8"),
   edge: await readFile(new URL("../supabase/functions/imdb/index.ts", import.meta.url), "utf8"),
   refreshEdge: await readFile(new URL("../supabase/functions/metadata-refresh/index.ts", import.meta.url), "utf8")
 };
@@ -136,6 +138,8 @@ function verifyProviders() {
       title: "Primary Title",
       title_type: "tvSeries",
       series_status: "Continuing",
+      end_year: 2020,
+      total_season_count: 2,
       total_runtime_minutes: null,
       metadata_provider: "imdb-oriented",
       provider_record_id: "tt4444444"
@@ -153,6 +157,8 @@ function verifyProviders() {
   assert.equal(merged.imdbId, "tt4444444", "TVDB cannot change canonical identity");
   assert.equal(merged.title, "Primary Title", "primary title wins");
   assert.equal(merged.seriesStatus, "Continuing", "primary field already present is not overwritten");
+  assert.equal(merged.endYear, 2020, "ended year flows through normalized provider metadata");
+  assert.equal(merged.totalSeasonCount, 2, "season count flows through normalized provider metadata");
   assert.equal(merged.totalEpisodeCount, 12);
   assert.equal(merged.totalRuntimeMinutes, 360);
   assert.equal(merged.tvdbRecordId, "tvdb-444");
@@ -260,6 +266,14 @@ function verifyTextContracts() {
   assert.match(rootFiles.app, /rel="noopener noreferrer"/, "IMDb link uses noopener noreferrer");
   assert.match(rootFiles.app, /referrerpolicy="no-referrer"/, "IMDb link avoids referrer leakage");
   assert.match(rootFiles.app, /closest\("button, a, input, select, textarea"\)/, "interactive controls do not start drag");
+  assert.match(rootFiles.app, /DRAG_HOLD_DELAY_MS = 400/, "card drag waits for a 0.4s hold");
+  assert.match(rootFiles.css, /touch-action: pan-y;/, "show cards allow normal vertical swipe scrolling before drag starts");
+  assert.match(rootFiles.app, /formatYearRange/, "cards render started-ended year ranges");
+  assert.match(rootFiles.app, /Total Runtime:/, "cards label cumulative runtime as Total Runtime");
+  assert.match(rootFiles.app, /formatEpisodeCount\(show\)/, "cards render season count before episode count");
+  assert.match(rootFiles.app, /queueBackgroundAudit/, "app audits rendered card backgrounds on load");
+  assert.match(rootFiles.providers, /verify-backgrounds/, "metadata edge adapter can request stale background repair");
+  assert.doesNotMatch(rootFiles.app, /show\.backgroundUrl[\s\S]*show\.posterUrl/, "card backgrounds do not fall back to poster images");
   assert.doesNotMatch(rootFiles.app, /Score /, "ordinary Board UI does not display numeric aggregate score");
   assert.match(rootFiles.app, /sessionStorage\.setItem\(REMINDER_DISMISSED_KEY/, "unranked reminder dismissal is session scoped");
   assert.match(rootFiles.index, /dismissReminderButton/, "unranked reminder has dismiss control");
@@ -274,6 +288,10 @@ function verifyTextContracts() {
   assert.match(rootFiles.migration, /delete from public\.user_show_rankings\s+where show_id = v_show\.id/i, "database restore clears prior ranking state");
   assert.match(rootFiles.migration, /tvdb_record_id/, "nomination persists TVDB record ID into dedicated column");
   assert.match(rootFiles.migration, /metadata_source_provenance/, "nomination persists source provenance");
+  assert.match(rootFiles.cardMigration, /add column if not exists total_season_count/, "card metadata migration persists season count");
+  assert.match(rootFiles.cardMigration, /add column if not exists end_year/, "card metadata migration persists ended year");
+  assert.match(rootFiles.cardMigration, /total_season_count = case/, "metadata refresh updates season count");
+  assert.match(rootFiles.cardMigration, /'end_year', b\.end_year/, "Board JSON exposes ended year");
   const retiredMeanStrategyPattern = new RegExp(["mean", "explicit", "position", "v1"].join("-"));
   assert.doesNotMatch(rootFiles.migration, retiredMeanStrategyPattern, "old Board strategy is absent from final migration");
   assert.doesNotMatch(rootFiles.migration, /jsonb_agg\(u\.display_name/, "browser RPC show JSON does not expose private nomination names");
@@ -283,6 +301,8 @@ function verifyTextContracts() {
   assert.match(rootFiles.edge, /\/search\/shows\?q=/, "IMDb Edge Function uses TVmaze search");
   assert.match(rootFiles.edge, /\/lookup\/shows\?imdb=/, "IMDb Edge Function resolves exact IMDb IDs through TVmaze");
   assert.match(rootFiles.edge, /\/shows\/\$\{tvmazeId\}\/episodes/, "IMDb Edge Function retrieves TVmaze episodes");
+  assert.match(rootFiles.edge, /action: "verify-backgrounds"/, "IMDb Edge Function exposes narrow background verification action");
+  assert.match(rootFiles.edge, /tvmaze_background_width/, "IMDb Edge Function records TVmaze background dimensions");
   assert.match(rootFiles.edge, /externals\.imdb/, "TVmaze canonical identity comes from externals.imdb");
   assert.match(rootFiles.edge, /cumulativeExplicitRuntime/, "TVmaze runtime is summed only from explicit episode runtime");
   assert.doesNotMatch(rootFiles.edge, /IMDB_SEARCH_URL_TEMPLATE/, "TVmaze primary provider does not require generic IMDb search URL template");
@@ -295,6 +315,7 @@ function verifyTextContracts() {
   assert.match(rootFiles.refreshEdge, /https:\/\/api\.tvmaze\.com/, "refresh function uses TVmaze as primary provider");
   assert.match(rootFiles.refreshEdge, /\/lookup\/shows\?imdb=/, "refresh function uses TVmaze exact IMDb lookup");
   assert.match(rootFiles.refreshEdge, /\/shows\/\$\{tvmazeId\}\/episodes/, "refresh function retrieves TVmaze episodes");
+  assert.match(rootFiles.refreshEdge, /tvmaze_background_width/, "refresh function records TVmaze background dimensions");
   assert.match(rootFiles.refreshEdge, /externals\.imdb/, "refresh canonical identity comes from TVmaze externals.imdb");
   assert.doesNotMatch(rootFiles.refreshEdge, /IMDB_TITLE_URL_TEMPLATE/, "refresh function does not require generic IMDb title URL template");
   assert.doesNotMatch(rootFiles.refreshEdge, /IMDB_API_KEY/, "refresh function does not require an IMDb API key");

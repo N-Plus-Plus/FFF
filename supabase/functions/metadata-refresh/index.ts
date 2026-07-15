@@ -12,6 +12,7 @@ type NormalizedTitle = {
   imdb_id: string;
   title: string;
   release_year: number | null;
+  end_year: number | null;
   title_type: string | null;
   series_status: string | null;
   total_season_count: number | null;
@@ -19,6 +20,8 @@ type NormalizedTitle = {
   total_runtime_minutes: number | null;
   poster_source_url: string | null;
   background_url: string | null;
+  background_width: number | null;
+  background_height: number | null;
   metadata_provider: string | null;
   provider_record_id: string | null;
   tvdb_record_id: string | null;
@@ -185,11 +188,14 @@ async function enrichWithTvdbFallback(primary: NormalizedTitle) {
   return {
     ...primary,
     series_status: primary.series_status || tvdb.series_status,
+    end_year: primary.end_year ?? tvdb.end_year,
     total_season_count: primary.total_season_count ?? tvdb.total_season_count,
     total_episode_count: primary.total_episode_count ?? tvdb.total_episode_count,
     total_runtime_minutes: primary.total_runtime_minutes ?? tvdb.total_runtime_minutes,
     poster_source_url: primary.poster_source_url || tvdb.poster_source_url,
     background_url: primary.background_url || tvdb.background_url,
+    background_width: primary.background_width ?? tvdb.background_width,
+    background_height: primary.background_height ?? tvdb.background_height,
     tvdb_record_id: tvdb.provider_record_id,
     metadata: {
       primary: primary.metadata,
@@ -223,6 +229,7 @@ function metadataPayload(title: NormalizedTitle) {
     imdb_id: title.imdb_id,
     title: title.title,
     release_year: title.release_year,
+    end_year: title.end_year,
     provider_title_type: title.title_type,
     series_status: title.series_status,
     total_season_count: title.total_season_count,
@@ -233,6 +240,8 @@ function metadataPayload(title: NormalizedTitle) {
     tvdb_record_id: title.tvdb_record_id,
     poster_source_url: title.poster_source_url,
     background_url: title.background_url,
+    background_width: title.background_width,
+    background_height: title.background_height,
     metadata_retrieved_at: new Date().toISOString(),
     metadata_refresh_status: "success",
     metadata_refresh_failure_category: null,
@@ -412,13 +421,16 @@ function normalizeTvmazeShow(
     imdb_id: imdbId,
     title: stringValue(show.name),
     release_year: yearValue(show.premiered),
+    end_year: yearValue(show.ended),
     title_type: stringValue(show.type) || "tvmaze-show",
     series_status: stringValue(show.status) || null,
     total_season_count: seasonCount,
     total_episode_count: episodeCount,
     total_runtime_minutes: totalRuntime,
     poster_source_url: poster || null,
-    background_url: background,
+    background_url: background?.url || null,
+    background_width: background?.width || null,
+    background_height: background?.height || null,
     metadata_provider: "tvmaze",
     provider_record_id: integerValue(show.id)?.toString() || null,
     tvdb_record_id: null,
@@ -428,11 +440,16 @@ function normalizeTvmazeShow(
       tvmaze_season_count: seasonCount,
       tvmaze_episode_count: episodeCount,
       tvmaze_runtime_complete: totalRuntime !== null,
-      tvmaze_background_url: background,
+      tvmaze_background_url: background?.url || null,
+      tvmaze_background_width: background?.width || null,
+      tvmaze_background_height: background?.height || null,
+      end_year: yearValue(show.ended),
+      tvmaze_end_year: yearValue(show.ended),
       provenance: {
         canonical: "tvmaze.externals.imdb",
         title: "tvmaze",
         release_year: "tvmaze",
+        end_year: yearValue(show.ended) !== null ? "tvmaze" : null,
         title_type: "tvmaze",
         series_status: "tvmaze",
         total_season_count: seasonCount !== null ? "tvmaze_episodes" : null,
@@ -445,7 +462,7 @@ function normalizeTvmazeShow(
   };
 }
 
-function selectTvmazeBackground(images: Record<string, unknown>[] | null): string | null {
+function selectTvmazeBackground(images: Record<string, unknown>[] | null): { url: string; width: number; height: number } | null {
   if (!images?.length) {
     return null;
   }
@@ -465,7 +482,7 @@ function selectTvmazeBackground(images: Record<string, unknown>[] | null): strin
     .filter((item) => item.url);
 
   candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
-  return candidates[0]?.url || null;
+  return candidates[0] || null;
 }
 
 function cumulativeExplicitRuntime(episodes: Record<string, unknown>[]) {
@@ -501,6 +518,7 @@ function normalizeTvdbTitle(item: Record<string, unknown>, canonicalImdbId: stri
     imdb_id: normalizeImdbId(stringValue(item.imdb_id) || stringValue(item.imdbId) || stringValue(item.imdb_id_crossref) || stringValue(item.imdbIdCrossref)),
     title: stringValue(item.title) || stringValue(item.name),
     release_year: yearValue(item.release_year) || yearValue(item.releaseYear) || yearValue(item.year),
+    end_year: yearValue(item.end_year) || yearValue(item.endYear) || yearValue(item.ended_year) || yearValue(item.endedYear) || yearValue(item.ended) || null,
     title_type: "tvdb-fallback",
     series_status: stringValue(item.series_status) || stringValue(item.seriesStatus) || stringValue(item.status) || null,
     total_season_count: integerValue(item.total_season_count) || integerValue(item.totalSeasonCount) || integerValue(item.season_count) || integerValue(item.seasonCount),
@@ -508,6 +526,8 @@ function normalizeTvdbTitle(item: Record<string, unknown>, canonicalImdbId: stri
     total_runtime_minutes: runtimeIsEstimate ? null : integerValue(item.total_runtime_minutes) || integerValue(item.totalRuntimeMinutes) || integerValue(item.runtime_minutes_total) || null,
     poster_source_url: poster || null,
     background_url: stringValue(item.background_url) || stringValue(item.backgroundUrl) || stringValue(item.backdrop_url) || stringValue(item.backdropUrl) || stringValue(item.banner_url) || stringValue(item.bannerUrl) || null,
+    background_width: integerValue(item.background_width) || integerValue(item.backgroundWidth) || null,
+    background_height: integerValue(item.background_height) || integerValue(item.backgroundHeight) || null,
     metadata_provider: "tvdb",
     provider_record_id: stringValue(item.tvdb_id) || stringValue(item.tvdbId) || stringValue(item.id) || null,
     tvdb_record_id: stringValue(item.tvdb_id) || stringValue(item.tvdbId) || stringValue(item.id) || null,
@@ -527,6 +547,7 @@ function provenance(primary: NormalizedTitle, tvdb: NormalizedTitle | null) {
     canonical: "imdb",
     title: "primary",
     series_status: primary.series_status ? "primary" : tvdb?.series_status ? "tvdb" : null,
+    end_year: primary.end_year != null ? "primary" : tvdb?.end_year != null ? "tvdb" : null,
     total_season_count: primary.total_season_count != null ? "primary" : tvdb?.total_season_count != null ? "tvdb" : null,
     total_episode_count: primary.total_episode_count != null ? "primary" : tvdb?.total_episode_count != null ? "tvdb" : null,
     total_runtime_minutes: primary.total_runtime_minutes != null ? "primary" : tvdb?.total_runtime_minutes != null ? "tvdb" : null,
