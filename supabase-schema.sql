@@ -1,0 +1,6 @@
+-- Historical pointer only.
+-- The authoritative Supabase schema now lives in timestamped migrations under:
+--   supabase/migrations/
+--
+-- Start with:
+--   supabase/migrations/20260715000100_initial_catalogue_architecture.sql
