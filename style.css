@@ -314,6 +314,10 @@ h2 {
   color: #111;
 }
 
+.button--nominate {
+  color: #111;
+}
+
 .button--modify {
   --button-colour: var(--intent-modify);
   --button-colour-dark: var(--intent-modify-dark);
@@ -713,6 +717,26 @@ h2 {
   box-shadow: none;
 }
 
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.58);
+}
+
+.loading-overlay[hidden] {
+  display: none;
+}
+
+.loading-overlay .lucide {
+  width: 3rem;
+  height: 3rem;
+  color: var(--mint);
+  animation: loading-spin 0.85s linear infinite;
+}
+
 .toast-region {
   position: fixed;
   right: 14px;
@@ -759,6 +783,12 @@ h2 {
 @keyframes toast-exit {
   to {
     opacity: 0;
+  }
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

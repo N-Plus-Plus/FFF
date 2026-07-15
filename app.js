@@ -26,6 +26,7 @@ const dom = {
   retrySaveButton: document.querySelector("#retrySaveButton"),
   boardStatus: document.querySelector("#boardStatus"),
   leaderboardList: document.querySelector("#leaderboardList"),
+  loadingOverlay: document.querySelector("#loadingOverlay"),
   toastRegion: document.querySelector("#toastRegion"),
   tabs: Array.from(document.querySelectorAll("[data-tab]")),
   panels: Array.from(document.querySelectorAll("[data-panel]"))
@@ -93,10 +94,7 @@ function bindEvents() {
   });
 
   dom.clearSearchButton.addEventListener("click", () => {
-    appState.searchResults = [];
-    appState.searchLoading = false;
-    dom.titleInput.value = "";
-    renderSearchResults();
+    clearSearch();
   });
 
   dom.retrySaveButton?.addEventListener("click", () => flushSaveQueue());
@@ -236,15 +234,26 @@ async function searchShows() {
 }
 
 async function nominateResult(result) {
+  showLoadingOverlay();
   try {
     const saved = await dataStore.nominate(appState.token, result);
     upsertActiveShow(saved);
     await reloadOrderAndCatalogue();
     render();
+    clearSearch();
     showToast(saved.alreadyNominated ? `${saved.title} is already nominated by you.` : `${saved.title} nominated.`, "success");
   } catch (error) {
     showToast(error.message, "error");
+  } finally {
+    hideLoadingOverlay();
   }
+}
+
+function clearSearch() {
+  appState.searchResults = [];
+  appState.searchLoading = false;
+  dom.titleInput.value = "";
+  renderSearchResults();
 }
 
 async function withdrawNomination(showId) {
@@ -353,7 +362,7 @@ function renderShowActions(container, show, options = {}) {
   if (known?.currentUserNominated) {
     container.append(actionButton("Withdraw", "button--destructive", () => withdrawNomination(known.id), "circle-minus"));
   } else {
-    container.append(actionButton("Nominate", "button--constructive", () => nominateResult(options.searchResult || show), "circle-plus"));
+    container.append(actionButton("Nominate", "button--constructive button--nominate", () => nominateResult(options.searchResult || show), "circle-plus"));
   }
 
   if (known?.id && appState.currentUser?.isAdmin) {
@@ -961,6 +970,14 @@ function showToast(message, kind = "info") {
   toast.textContent = message;
   dom.toastRegion.append(toast);
   window.setTimeout(() => toast.remove(), 3600);
+}
+
+function showLoadingOverlay() {
+  dom.loadingOverlay.hidden = false;
+}
+
+function hideLoadingOverlay() {
+  dom.loadingOverlay.hidden = true;
 }
 
 function escapeHtml(value) {

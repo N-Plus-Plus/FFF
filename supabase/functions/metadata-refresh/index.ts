@@ -18,6 +18,7 @@ type NormalizedTitle = {
   total_episode_count: number | null;
   total_runtime_minutes: number | null;
   poster_source_url: string | null;
+  background_url: string | null;
   metadata_provider: string | null;
   provider_record_id: string | null;
   tvdb_record_id: string | null;
@@ -158,8 +159,13 @@ async function lookupPrimary(imdbId: string): Promise<NormalizedTitle | null> {
     timeoutMs
   });
   const item = extractSingleItem(payload);
-  const episodes = item ? await fetchTvmazeEpisodes(item, timeoutMs) : null;
-  const normalized = item ? normalizeTvmazeShow(item, episodes) : null;
+  const [episodes, images] = item
+    ? await Promise.all([
+        fetchTvmazeEpisodes(item, timeoutMs).catch(() => null),
+        fetchTvmazeImages(item, timeoutMs).catch(() => null)
+      ])
+    : [null, null];
+  const normalized = item ? normalizeTvmazeShow(item, episodes, images) : null;
   return normalized && normalized.imdb_id === imdbId && isTelevisionTitle(normalized) ? normalized : null;
 }
 
@@ -183,6 +189,7 @@ async function enrichWithTvdbFallback(primary: NormalizedTitle) {
     total_episode_count: primary.total_episode_count ?? tvdb.total_episode_count,
     total_runtime_minutes: primary.total_runtime_minutes ?? tvdb.total_runtime_minutes,
     poster_source_url: primary.poster_source_url || tvdb.poster_source_url,
+    background_url: primary.background_url || tvdb.background_url,
     tvdb_record_id: tvdb.provider_record_id,
     metadata: {
       primary: primary.metadata,
@@ -225,6 +232,7 @@ function metadataPayload(title: NormalizedTitle) {
     provider_record_id: title.provider_record_id,
     tvdb_record_id: title.tvdb_record_id,
     poster_source_url: title.poster_source_url,
+    background_url: title.background_url,
     metadata_retrieved_at: new Date().toISOString(),
     metadata_refresh_status: "success",
     metadata_refresh_failure_category: null,
@@ -373,7 +381,24 @@ async function fetchTvmazeEpisodes(show: Record<string, unknown>, timeoutMs: num
   return Array.isArray(payload) ? payload.filter(isRecord) : null;
 }
 
-function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<string, unknown>[] | null): NormalizedTitle {
+async function fetchTvmazeImages(show: Record<string, unknown>, timeoutMs: number): Promise<Record<string, unknown>[] | null> {
+  const tvmazeId = integerValue(show.id);
+  if (tvmazeId === null) {
+    return null;
+  }
+  const payload = await fetchProviderJson(`${TVMAZE_BASE_URL}/shows/${tvmazeId}/images`, {
+    apiKey: "",
+    apiKeyHeader: "",
+    timeoutMs
+  });
+  return Array.isArray(payload) ? payload.filter(isRecord) : null;
+}
+
+function normalizeTvmazeShow(
+  show: Record<string, unknown>,
+  episodes: Record<string, unknown>[] | null,
+  images: Record<string, unknown>[] | null = null
+): NormalizedTitle {
   const externals = isRecord(show.externals) ? show.externals : {};
   const image = isRecord(show.image) ? show.image : {};
   const imdbId = normalizeImdbId(stringValue(externals.imdb));
@@ -381,6 +406,7 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
   const seasonCount = episodes ? totalSeasonCount(episodes) : null;
   const totalRuntime = episodes ? cumulativeExplicitRuntime(episodes) : null;
   const poster = stringValue(image.original) || stringValue(image.medium);
+  const background = selectTvmazeBackground(images);
 
   return {
     imdb_id: imdbId,
@@ -392,6 +418,7 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
     total_episode_count: episodeCount,
     total_runtime_minutes: totalRuntime,
     poster_source_url: poster || null,
+    background_url: background,
     metadata_provider: "tvmaze",
     provider_record_id: integerValue(show.id)?.toString() || null,
     tvdb_record_id: null,
@@ -401,6 +428,7 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
       tvmaze_season_count: seasonCount,
       tvmaze_episode_count: episodeCount,
       tvmaze_runtime_complete: totalRuntime !== null,
+      tvmaze_background_url: background,
       provenance: {
         canonical: "tvmaze.externals.imdb",
         title: "tvmaze",
@@ -410,10 +438,34 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
         total_season_count: seasonCount !== null ? "tvmaze_episodes" : null,
         total_episode_count: episodeCount !== null ? "tvmaze" : null,
         total_runtime_minutes: totalRuntime !== null ? "tvmaze_episodes" : null,
-        poster_source_url: poster ? "tvmaze" : null
+        poster_source_url: poster ? "tvmaze" : null,
+        background_url: background ? "tvmaze_images" : null
       }
     }
   };
+}
+
+function selectTvmazeBackground(images: Record<string, unknown>[] | null): string | null {
+  if (!images?.length) {
+    return null;
+  }
+  const candidates = images
+    .filter((item) => stringValue(item.type).toLowerCase() === "background")
+    .map((item) => {
+      const resolutions = isRecord(item.resolutions) ? item.resolutions : {};
+      const original = isRecord(resolutions.original) ? resolutions.original : {};
+      const medium = isRecord(resolutions.medium) ? resolutions.medium : {};
+      const selected = stringValue(original.url) ? original : medium;
+      return {
+        url: stringValue(selected.url),
+        width: integerValue(selected.width) || 0,
+        height: integerValue(selected.height) || 0
+      };
+    })
+    .filter((item) => item.url);
+
+  candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
+  return candidates[0]?.url || null;
 }
 
 function cumulativeExplicitRuntime(episodes: Record<string, unknown>[]) {
@@ -455,6 +507,7 @@ function normalizeTvdbTitle(item: Record<string, unknown>, canonicalImdbId: stri
     total_episode_count: integerValue(item.total_episode_count) || integerValue(item.totalEpisodeCount) || integerValue(item.episode_count) || integerValue(item.episodeCount),
     total_runtime_minutes: runtimeIsEstimate ? null : integerValue(item.total_runtime_minutes) || integerValue(item.totalRuntimeMinutes) || integerValue(item.runtime_minutes_total) || null,
     poster_source_url: poster || null,
+    background_url: stringValue(item.background_url) || stringValue(item.backgroundUrl) || stringValue(item.backdrop_url) || stringValue(item.backdropUrl) || stringValue(item.banner_url) || stringValue(item.bannerUrl) || null,
     metadata_provider: "tvdb",
     provider_record_id: stringValue(item.tvdb_id) || stringValue(item.tvdbId) || stringValue(item.id) || null,
     tvdb_record_id: stringValue(item.tvdb_id) || stringValue(item.tvdbId) || stringValue(item.id) || null,
@@ -477,7 +530,8 @@ function provenance(primary: NormalizedTitle, tvdb: NormalizedTitle | null) {
     total_season_count: primary.total_season_count != null ? "primary" : tvdb?.total_season_count != null ? "tvdb" : null,
     total_episode_count: primary.total_episode_count != null ? "primary" : tvdb?.total_episode_count != null ? "tvdb" : null,
     total_runtime_minutes: primary.total_runtime_minutes != null ? "primary" : tvdb?.total_runtime_minutes != null ? "tvdb" : null,
-    poster_source_url: primary.poster_source_url ? "primary" : tvdb?.poster_source_url ? "tvdb" : null
+    poster_source_url: primary.poster_source_url ? "primary" : tvdb?.poster_source_url ? "tvdb" : null,
+    background_url: primary.background_url ? "primary" : tvdb?.background_url ? "tvdb" : null
   };
 }
 

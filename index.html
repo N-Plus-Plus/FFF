@@ -39,10 +39,6 @@
         </div>
 
         <section id="panel-add" class="panel is-active" data-panel="add" aria-labelledby="tab-add">
-          <div class="panel-heading">
-            <h2>Add shows</h2>
-          </div>
-
           <form id="addForm" class="entry-form" autocomplete="off">
             <label class="field">
               <span class="field__label">IMDb title, URL, or show name</span>
@@ -62,7 +58,6 @@
 
         <section id="panel-rank" class="panel" data-panel="rank" aria-labelledby="tab-rank">
           <div class="panel-heading">
-            <h2>Your order</h2>
             <p>Drag or <i class="inline-copy-icon" data-lucide="arrow-up" aria-label="up"></i> / <i class="inline-copy-icon" data-lucide="arrow-down" aria-label="down"></i> to register your preference order!</p>
           </div>
           <h3 class="list-heading">Ranked</h3>
@@ -73,7 +68,6 @@
 
         <section id="panel-board" class="panel" data-panel="board" aria-labelledby="tab-board">
           <div class="panel-heading">
-            <h2>Group board</h2>
             <p>As voted by you, here is the watch order!</p>
           </div>
           <div id="boardStatus" class="status-line" aria-live="polite">Not refreshed yet</div>
@@ -89,6 +83,10 @@
         </button>
         <button id="tab-board" class="bottom-tab" type="button" data-tab="board" aria-controls="panel-board" aria-selected="false">Board</button>
       </nav>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true" hidden>
+      <i data-lucide="loader-circle" aria-hidden="true"></i>
     </div>
 
     <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
