@@ -186,6 +186,7 @@ export function normalizeProviderTitle(input) {
 
   const posterSourceUrl = input.poster_source_url || input.posterSourceUrl || input.poster_url || input.posterUrl || "";
   const backgroundUrl = input.background_url || input.backgroundUrl || input.banner_url || input.bannerUrl || input.backdrop_url || input.backdropUrl || "";
+  const cardArtUrl = input.card_art_url || input.cardArtUrl || input.card_art_source_url || input.cardArtSourceUrl || backgroundUrl || posterSourceUrl;
   const runtimeIsEstimate = Boolean(input.total_runtime_is_estimate || input.totalRuntimeIsEstimate || input.runtime_is_estimate || input.runtimeIsEstimate);
   return {
     imdbId: input.imdb_id || input.imdbId || "",
@@ -199,6 +200,8 @@ export function normalizeProviderTitle(input) {
     totalRuntimeMinutes: runtimeIsEstimate ? null : input.total_runtime_minutes ?? input.totalRuntimeMinutes ?? null,
     posterUrl: input.poster_url || input.posterUrl || posterSourceUrl,
     posterSourceUrl,
+    cardArtUrl,
+    cardArtType: input.card_art_type || input.cardArtType || "",
     backgroundUrl,
     bannerUrl: input.banner_url || input.bannerUrl || backgroundUrl,
     backdropUrl: input.backdrop_url || input.backdropUrl || backgroundUrl,

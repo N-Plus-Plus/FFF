@@ -282,10 +282,16 @@ function normalizeShow(show, config = null) {
     providerRecordId: show.provider_record_id || show.providerRecordId || null,
     metadataRetrievedAt: show.metadata_retrieved_at || show.metadataRetrievedAt || null,
     posterStoragePath,
+    cardArtStoragePath: show.card_art_storage_path || show.cardArtStoragePath || "",
+    cardArtSourceUrl: show.card_art_source_url || show.cardArtSourceUrl || "",
+    cardArtType: show.card_art_type || show.cardArtType || "",
     posterSourceUrl: show.poster_source_url || show.posterSourceUrl || "",
     posterRetrievalStatus: show.poster_retrieval_status || show.posterRetrievalStatus || "",
     posterUpdatedAt: show.poster_updated_at || show.posterUpdatedAt || null,
     posterUrl: posterStoragePath ? posterPublicUrl(config, posterStoragePath) : "",
+    cardArtUrl: show.card_art_storage_path || show.cardArtStoragePath
+      ? posterPublicUrl(config, show.card_art_storage_path || show.cardArtStoragePath)
+      : show.card_art_source_url || show.cardArtSourceUrl || "",
     backgroundUrl: show.background_url || show.backgroundUrl || "",
     bannerUrl: show.banner_url || show.bannerUrl || "",
     backdropUrl: show.backdrop_url || show.backdropUrl || "",
@@ -319,10 +325,16 @@ function normalizeBoard(board, config = null) {
       totalEpisodeCount: entry.total_episode_count ?? entry.totalEpisodeCount ?? null,
       totalRuntimeMinutes: entry.total_runtime_minutes ?? entry.totalRuntimeMinutes ?? null,
       posterStoragePath: entry.poster_storage_path || entry.posterStoragePath || "",
+      cardArtStoragePath: entry.card_art_storage_path || entry.cardArtStoragePath || "",
+      cardArtSourceUrl: entry.card_art_source_url || entry.cardArtSourceUrl || "",
+      cardArtType: entry.card_art_type || entry.cardArtType || "",
       posterRetrievalStatus: entry.poster_retrieval_status || entry.posterRetrievalStatus || "",
       posterUrl: entry.poster_storage_path || entry.posterStoragePath
         ? posterPublicUrl(config, entry.poster_storage_path || entry.posterStoragePath)
         : "",
+      cardArtUrl: entry.card_art_storage_path || entry.cardArtStoragePath
+        ? posterPublicUrl(config, entry.card_art_storage_path || entry.cardArtStoragePath)
+        : entry.card_art_source_url || entry.cardArtSourceUrl || "",
       backgroundUrl: entry.background_url || entry.backgroundUrl || "",
       bannerUrl: entry.banner_url || entry.bannerUrl || "",
       backdropUrl: entry.backdrop_url || entry.backdropUrl || "",

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { selectTvmazeCardArt } from "../_shared/tvmaze-art.js";
 
 type RefreshCandidate = {
   id: string;
@@ -6,6 +7,7 @@ type RefreshCandidate = {
   title: string;
   poster_storage_path?: string | null;
   poster_source_url?: string | null;
+  card_art_storage_path?: string | null;
 };
 
 type NormalizedTitle = {
@@ -22,6 +24,10 @@ type NormalizedTitle = {
   background_url: string | null;
   background_width: number | null;
   background_height: number | null;
+  card_art_url: string | null;
+  card_art_type: string | null;
+  card_art_width: number | null;
+  card_art_height: number | null;
   metadata_provider: string | null;
   provider_record_id: string | null;
   tvdb_record_id: string | null;
@@ -77,7 +83,7 @@ Deno.serve(async (request) => {
   const body = await request.json().catch(() => ({}));
   const limit = boundedLimit(body?.limit);
   const supabase = serviceClient();
-  const summary = { attempted: 0, succeeded: 0, failed: 0, postersStored: 0, skipped: 0 };
+  const summary = { attempted: 0, succeeded: 0, failed: 0, postersStored: 0, cardArtStored: 0, skipped: 0 };
 
   const { data: candidates, error } = await supabase.rpc("admin_list_metadata_refresh_candidates", { p_limit: limit });
   if (error) {
@@ -98,6 +104,25 @@ Deno.serve(async (request) => {
         p_show_id: candidate.id,
         p_metadata: metadataPayload(merged)
       });
+
+      if (!candidate.card_art_storage_path && merged.card_art_url && merged.card_art_type !== "placeholder") {
+        const cardArtResult = await copyCardArtToStorage(supabase, merged).catch((artError) => ({
+          path: null,
+          status: artError instanceof PosterError ? artError.kind : "failed"
+        }));
+        if (cardArtResult.path) {
+          summary.cardArtStored += 1;
+        }
+        await supabase.rpc("admin_record_show_card_art_result", {
+          p_show_id: candidate.id,
+          p_storage_path: cardArtResult.path,
+          p_source_url: merged.card_art_url,
+          p_art_type: merged.card_art_type,
+          p_status: cardArtResult.status,
+          p_width: merged.card_art_width,
+          p_height: merged.card_art_height
+        });
+      }
 
       if (!candidate.poster_storage_path && merged.poster_source_url) {
         const posterResult = await copyPosterToStorage(supabase, merged).catch((posterError) => ({
@@ -196,6 +221,10 @@ async function enrichWithTvdbFallback(primary: NormalizedTitle) {
     background_url: primary.background_url || tvdb.background_url,
     background_width: primary.background_width ?? tvdb.background_width,
     background_height: primary.background_height ?? tvdb.background_height,
+    card_art_url: primary.card_art_url || tvdb.card_art_url,
+    card_art_type: primary.card_art_type || tvdb.card_art_type,
+    card_art_width: primary.card_art_width ?? tvdb.card_art_width,
+    card_art_height: primary.card_art_height ?? tvdb.card_art_height,
     tvdb_record_id: tvdb.provider_record_id,
     metadata: {
       primary: primary.metadata,
@@ -242,6 +271,10 @@ function metadataPayload(title: NormalizedTitle) {
     background_url: title.background_url,
     background_width: title.background_width,
     background_height: title.background_height,
+    card_art_url: title.card_art_url,
+    card_art_type: title.card_art_type,
+    card_art_width: title.card_art_width,
+    card_art_height: title.card_art_height,
     metadata_retrieved_at: new Date().toISOString(),
     metadata_refresh_status: "success",
     metadata_refresh_failure_category: null,
@@ -277,6 +310,26 @@ async function copyPosterToStorage(serviceClientRef: ReturnType<typeof createCli
   const path = `posters/${title.imdb_id}.${extension}`;
   const { error } = await serviceClientRef.storage.from(POSTER_BUCKET).upload(path, poster.bytes, {
     contentType: poster.contentType,
+    upsert: true
+  });
+  if (error) {
+    throw new PosterError("storage_failed");
+  }
+  return { path, status: "stored" };
+}
+
+async function copyCardArtToStorage(serviceClientRef: ReturnType<typeof createClient>, title: NormalizedTitle) {
+  if (!title.card_art_url || title.card_art_type === "placeholder") {
+    throw new PosterError("not_available");
+  }
+  const art = await fetchPoster(title.card_art_url);
+  const extension = SUPPORTED_POSTER_TYPES.get(art.contentType);
+  if (!extension) {
+    throw new PosterError("unsupported_content_type");
+  }
+  const path = `card-art/${title.imdb_id}.${extension}`;
+  const { error } = await serviceClientRef.storage.from(POSTER_BUCKET).upload(path, art.bytes, {
+    contentType: art.contentType,
     upsert: true
   });
   if (error) {
@@ -415,7 +468,8 @@ function normalizeTvmazeShow(
   const seasonCount = episodes ? totalSeasonCount(episodes) : null;
   const totalRuntime = episodes ? cumulativeExplicitRuntime(episodes) : null;
   const poster = stringValue(image.original) || stringValue(image.medium);
-  const background = selectTvmazeBackground(images);
+  const cardArt = selectTvmazeCardArt(show, images);
+  const isHorizontalArt = cardArt.type === "background" || cardArt.type === "banner";
 
   return {
     imdb_id: imdbId,
@@ -428,9 +482,13 @@ function normalizeTvmazeShow(
     total_episode_count: episodeCount,
     total_runtime_minutes: totalRuntime,
     poster_source_url: poster || null,
-    background_url: background?.url || null,
-    background_width: background?.width || null,
-    background_height: background?.height || null,
+    background_url: isHorizontalArt ? cardArt.sourceUrl : null,
+    background_width: isHorizontalArt ? cardArt.width : null,
+    background_height: isHorizontalArt ? cardArt.height : null,
+    card_art_url: cardArt.sourceUrl,
+    card_art_type: cardArt.type,
+    card_art_width: cardArt.width,
+    card_art_height: cardArt.height,
     metadata_provider: "tvmaze",
     provider_record_id: integerValue(show.id)?.toString() || null,
     tvdb_record_id: null,
@@ -440,9 +498,13 @@ function normalizeTvmazeShow(
       tvmaze_season_count: seasonCount,
       tvmaze_episode_count: episodeCount,
       tvmaze_runtime_complete: totalRuntime !== null,
-      tvmaze_background_url: background?.url || null,
-      tvmaze_background_width: background?.width || null,
-      tvmaze_background_height: background?.height || null,
+      tvmaze_card_art_url: cardArt.sourceUrl,
+      tvmaze_card_art_type: cardArt.type,
+      tvmaze_card_art_width: cardArt.width,
+      tvmaze_card_art_height: cardArt.height,
+      tvmaze_background_url: cardArt.type === "background" ? cardArt.sourceUrl : null,
+      tvmaze_background_width: cardArt.type === "background" ? cardArt.width : null,
+      tvmaze_background_height: cardArt.type === "background" ? cardArt.height : null,
       end_year: yearValue(show.ended),
       tvmaze_end_year: yearValue(show.ended),
       provenance: {
@@ -456,33 +518,11 @@ function normalizeTvmazeShow(
         total_episode_count: episodeCount !== null ? "tvmaze" : null,
         total_runtime_minutes: totalRuntime !== null ? "tvmaze_episodes" : null,
         poster_source_url: poster ? "tvmaze" : null,
-        background_url: background ? "tvmaze_images" : null
+        background_url: isHorizontalArt ? "tvmaze_images" : null,
+        card_art_url: cardArt.source
       }
     }
   };
-}
-
-function selectTvmazeBackground(images: Record<string, unknown>[] | null): { url: string; width: number; height: number } | null {
-  if (!images?.length) {
-    return null;
-  }
-  const candidates = images
-    .filter((item) => stringValue(item.type).toLowerCase() === "background")
-    .map((item) => {
-      const resolutions = isRecord(item.resolutions) ? item.resolutions : {};
-      const original = isRecord(resolutions.original) ? resolutions.original : {};
-      const medium = isRecord(resolutions.medium) ? resolutions.medium : {};
-      const selected = stringValue(original.url) ? original : medium;
-      return {
-        url: stringValue(selected.url),
-        width: integerValue(selected.width) || 0,
-        height: integerValue(selected.height) || 0
-      };
-    })
-    .filter((item) => item.url);
-
-  candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
-  return candidates[0] || null;
 }
 
 function cumulativeExplicitRuntime(episodes: Record<string, unknown>[]) {
@@ -528,6 +568,10 @@ function normalizeTvdbTitle(item: Record<string, unknown>, canonicalImdbId: stri
     background_url: stringValue(item.background_url) || stringValue(item.backgroundUrl) || stringValue(item.backdrop_url) || stringValue(item.backdropUrl) || stringValue(item.banner_url) || stringValue(item.bannerUrl) || null,
     background_width: integerValue(item.background_width) || integerValue(item.backgroundWidth) || null,
     background_height: integerValue(item.background_height) || integerValue(item.backgroundHeight) || null,
+    card_art_url: stringValue(item.card_art_url) || stringValue(item.cardArtUrl) || stringValue(item.background_url) || stringValue(item.backgroundUrl) || stringValue(item.banner_url) || stringValue(item.bannerUrl) || null,
+    card_art_type: stringValue(item.card_art_type) || stringValue(item.cardArtType) || (stringValue(item.banner_url) || stringValue(item.bannerUrl) ? "banner" : "background"),
+    card_art_width: integerValue(item.card_art_width) || integerValue(item.cardArtWidth) || integerValue(item.background_width) || integerValue(item.backgroundWidth) || null,
+    card_art_height: integerValue(item.card_art_height) || integerValue(item.cardArtHeight) || integerValue(item.background_height) || integerValue(item.backgroundHeight) || null,
     metadata_provider: "tvdb",
     provider_record_id: stringValue(item.tvdb_id) || stringValue(item.tvdbId) || stringValue(item.id) || null,
     tvdb_record_id: stringValue(item.tvdb_id) || stringValue(item.tvdbId) || stringValue(item.id) || null,
@@ -552,7 +596,8 @@ function provenance(primary: NormalizedTitle, tvdb: NormalizedTitle | null) {
     total_episode_count: primary.total_episode_count != null ? "primary" : tvdb?.total_episode_count != null ? "tvdb" : null,
     total_runtime_minutes: primary.total_runtime_minutes != null ? "primary" : tvdb?.total_runtime_minutes != null ? "tvdb" : null,
     poster_source_url: primary.poster_source_url ? "primary" : tvdb?.poster_source_url ? "tvdb" : null,
-    background_url: primary.background_url ? "primary" : tvdb?.background_url ? "tvdb" : null
+    background_url: primary.background_url ? "primary" : tvdb?.background_url ? "tvdb" : null,
+    card_art_url: primary.card_art_url ? "primary" : tvdb?.card_art_url ? "tvdb" : null
   };
 }
 

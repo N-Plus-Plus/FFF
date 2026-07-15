@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { selectTvmazeCardArt } from "../_shared/tvmaze-art.js";
 
 type AppUser = {
   id: string;
@@ -35,6 +36,10 @@ type NormalizedTitle = {
   background_url: string | null;
   background_width: number | null;
   background_height: number | null;
+  card_art_url: string | null;
+  card_art_type: string | null;
+  card_art_width: number | null;
+  card_art_height: number | null;
   poster_storage_path: string | null;
   poster_retrieval_status: string | null;
   metadata_provider: string | null;
@@ -256,6 +261,20 @@ async function enrollShow(token: string, title: NormalizedTitle) {
     path: null,
     status: error instanceof PosterError ? error.kind : "failed"
   }));
+  const cardArtResult = await copyCardArtToStorage(serviceClient, title).catch((error) => ({
+    path: null,
+    status: error instanceof PosterError ? error.kind : "failed"
+  }));
+
+  await serviceClient.rpc("admin_record_show_card_art_result", {
+    p_show_id: nominated.id,
+    p_storage_path: cardArtResult.path,
+    p_source_url: title.card_art_url,
+    p_art_type: title.card_art_type,
+    p_status: cardArtResult.status,
+    p_width: title.card_art_width,
+    p_height: title.card_art_height
+  });
 
   const { data: updated } = await serviceClient.rpc("admin_record_show_poster_result", {
     p_show_id: nominated.id,
@@ -283,6 +302,10 @@ function providerMetadata(title: NormalizedTitle) {
     background_url: title.background_url,
     background_width: title.background_width,
     background_height: title.background_height,
+    card_art_url: title.card_art_url,
+    card_art_type: title.card_art_type,
+    card_art_width: title.card_art_width,
+    card_art_height: title.card_art_height,
     poster_retrieval_status: title.poster_source_url ? "pending" : "not_available",
     source_provenance: title.metadata.provenance || null,
     upstream: title.metadata
@@ -312,16 +335,15 @@ async function verifyBackgrounds(items: BackgroundAuditItem[]) {
     seen.add(showId);
 
     const latest = await adapter.lookup(imdbId).catch(() => null);
-    if (!latest?.background_url) {
+    if (!latest?.card_art_url) {
       continue;
     }
     const width = Number(item.width || 0);
     const height = Number(item.height || 0);
-    const dimensionsMismatch = latest.background_width && latest.background_height
-      ? width !== latest.background_width || height !== latest.background_height
+    const dimensionsMismatch = latest.card_art_width && latest.card_art_height
+      ? width !== latest.card_art_width || height !== latest.card_art_height
       : false;
-    const urlMismatch = normalizeUrl(item.backgroundUrl || "") !== normalizeUrl(latest.background_url);
-    if (!urlMismatch && !dimensionsMismatch) {
+    if (!dimensionsMismatch) {
       continue;
     }
 
@@ -337,6 +359,19 @@ async function verifyBackgrounds(items: BackgroundAuditItem[]) {
       }
     });
     if (!error) {
+      const cardArtResult = await copyCardArtToStorage(serviceClient, latest).catch((artError) => ({
+        path: null,
+        status: artError instanceof PosterError ? artError.kind : "failed"
+      }));
+      await serviceClient.rpc("admin_record_show_card_art_result", {
+        p_show_id: showId,
+        p_storage_path: cardArtResult.path,
+        p_source_url: latest.card_art_url,
+        p_art_type: latest.card_art_type,
+        p_status: cardArtResult.status,
+        p_width: latest.card_art_width,
+        p_height: latest.card_art_height
+      });
       updated.push(showId);
     }
   }
@@ -360,6 +395,32 @@ async function copyPosterToStorage(serviceClient: ReturnType<typeof createClient
     .from(POSTER_BUCKET)
     .upload(path, poster.bytes, {
       contentType: poster.contentType,
+      upsert: true
+    });
+
+  if (error) {
+    throw new PosterError("storage_failed");
+  }
+
+  return { path, status: "stored" };
+}
+
+async function copyCardArtToStorage(serviceClient: ReturnType<typeof createClient>, title: NormalizedTitle) {
+  if (!title.card_art_url || title.card_art_type === "placeholder") {
+    throw new PosterError("not_available");
+  }
+
+  const art = await fetchPoster(title.card_art_url);
+  const extension = SUPPORTED_POSTER_TYPES.get(art.contentType);
+  if (!extension) {
+    throw new PosterError("unsupported_content_type");
+  }
+
+  const path = `card-art/${title.imdb_id}.${extension}`;
+  const { error } = await serviceClient.storage
+    .from(POSTER_BUCKET)
+    .upload(path, art.bytes, {
+      contentType: art.contentType,
       upsert: true
     });
 
@@ -576,13 +637,14 @@ function normalizeTvmazeShow(
   images: Record<string, unknown>[] | null = null
 ): NormalizedTitle {
   const externals = isRecord(show.externals) ? show.externals : {};
-  const image = isRecord(show.image) ? show.image : {};
   const imdbId = normalizeImdbId(stringValue(externals.imdb));
   const episodeCount = episodes ? episodes.length : null;
   const seasonCount = episodes ? totalSeasonCount(episodes) : null;
   const totalRuntime = episodes ? cumulativeExplicitRuntime(episodes) : null;
+  const image = isRecord(show.image) ? show.image : {};
   const poster = stringValue(image.original) || stringValue(image.medium);
-  const background = selectTvmazeBackground(images);
+  const cardArt = selectTvmazeCardArt(show, images);
+  const isHorizontalArt = cardArt.type === "background" || cardArt.type === "banner";
 
   return {
     imdb_id: imdbId,
@@ -596,9 +658,13 @@ function normalizeTvmazeShow(
     total_runtime_minutes: totalRuntime,
     poster_url: poster || null,
     poster_source_url: poster || null,
-    background_url: background?.url || null,
-    background_width: background?.width || null,
-    background_height: background?.height || null,
+    background_url: isHorizontalArt ? cardArt.sourceUrl : null,
+    background_width: isHorizontalArt ? cardArt.width : null,
+    background_height: isHorizontalArt ? cardArt.height : null,
+    card_art_url: cardArt.sourceUrl,
+    card_art_type: cardArt.type,
+    card_art_width: cardArt.width,
+    card_art_height: cardArt.height,
     poster_storage_path: null,
     poster_retrieval_status: poster ? "not_copied" : "not_available",
     metadata_provider: "tvmaze",
@@ -610,9 +676,13 @@ function normalizeTvmazeShow(
       tvmaze_season_count: seasonCount,
       tvmaze_episode_count: episodeCount,
       tvmaze_runtime_complete: totalRuntime !== null,
-      tvmaze_background_url: background?.url || null,
-      tvmaze_background_width: background?.width || null,
-      tvmaze_background_height: background?.height || null,
+      tvmaze_card_art_url: cardArt.sourceUrl,
+      tvmaze_card_art_type: cardArt.type,
+      tvmaze_card_art_width: cardArt.width,
+      tvmaze_card_art_height: cardArt.height,
+      tvmaze_background_url: cardArt.type === "background" ? cardArt.sourceUrl : null,
+      tvmaze_background_width: cardArt.type === "background" ? cardArt.width : null,
+      tvmaze_background_height: cardArt.type === "background" ? cardArt.height : null,
       end_year: yearValue(show.ended),
       tvmaze_end_year: yearValue(show.ended),
       provenance: {
@@ -626,33 +696,11 @@ function normalizeTvmazeShow(
         total_episode_count: episodeCount !== null ? "tvmaze" : null,
         total_runtime_minutes: totalRuntime !== null ? "tvmaze_episodes" : null,
         poster_source_url: poster ? "tvmaze" : null,
-        background_url: background ? "tvmaze_images" : null
+        background_url: isHorizontalArt ? "tvmaze_images" : null,
+        card_art_url: cardArt.source
       }
     }
   };
-}
-
-function selectTvmazeBackground(images: Record<string, unknown>[] | null): { url: string; width: number; height: number } | null {
-  if (!images?.length) {
-    return null;
-  }
-  const candidates = images
-    .filter((item) => stringValue(item.type).toLowerCase() === "background")
-    .map((item) => {
-      const resolutions = isRecord(item.resolutions) ? item.resolutions : {};
-      const original = isRecord(resolutions.original) ? resolutions.original : {};
-      const medium = isRecord(resolutions.medium) ? resolutions.medium : {};
-      const selected = stringValue(original.url) ? original : medium;
-      return {
-        url: stringValue(selected.url),
-        width: integerValue(selected.width) || 0,
-        height: integerValue(selected.height) || 0
-      };
-    })
-    .filter((item) => item.url);
-
-  candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height));
-  return candidates[0] || null;
 }
 
 function cumulativeExplicitRuntime(episodes: Record<string, unknown>[]) {
@@ -715,6 +763,10 @@ async function enrichWithTvdbFallback(primary: NormalizedTitle | null): Promise<
     background_url: primary.background_url || tvdb.background_url,
     background_width: primary.background_width ?? tvdb.background_width,
     background_height: primary.background_height ?? tvdb.background_height,
+    card_art_url: primary.card_art_url || tvdb.card_art_url,
+    card_art_type: primary.card_art_type || tvdb.card_art_type,
+    card_art_width: primary.card_art_width ?? tvdb.card_art_width,
+    card_art_height: primary.card_art_height ?? tvdb.card_art_height,
     tvdb_record_id: tvdb.provider_record_id,
     metadata: {
       primary: primary.metadata,
@@ -728,7 +780,8 @@ async function enrichWithTvdbFallback(primary: NormalizedTitle | null): Promise<
         total_episode_count: primary.total_episode_count != null ? "primary" : tvdb.total_episode_count != null ? "tvdb" : null,
         total_runtime_minutes: primary.total_runtime_minutes != null ? "primary" : tvdb.total_runtime_minutes != null ? "tvdb" : null,
         poster_source_url: primary.poster_source_url ? "primary" : tvdb.poster_source_url ? "tvdb" : null,
-        background_url: primary.background_url ? "primary" : tvdb.background_url ? "tvdb" : null
+        background_url: primary.background_url ? "primary" : tvdb.background_url ? "tvdb" : null,
+        card_art_url: primary.card_art_url ? "primary" : tvdb.card_art_url ? "tvdb" : null
       }
     }
   };
@@ -779,6 +832,10 @@ function normalizeTvdbTitle(item: Record<string, unknown>, canonicalImdbId: stri
     background_url: stringValue(item.background_url) || stringValue(item.backgroundUrl) || stringValue(item.backdrop_url) || stringValue(item.backdropUrl) || stringValue(item.banner_url) || stringValue(item.bannerUrl) || null,
     background_width: integerValue(item.background_width) || integerValue(item.backgroundWidth) || null,
     background_height: integerValue(item.background_height) || integerValue(item.backgroundHeight) || null,
+    card_art_url: stringValue(item.card_art_url) || stringValue(item.cardArtUrl) || stringValue(item.background_url) || stringValue(item.backgroundUrl) || stringValue(item.banner_url) || stringValue(item.bannerUrl) || null,
+    card_art_type: stringValue(item.card_art_type) || stringValue(item.cardArtType) || (stringValue(item.banner_url) || stringValue(item.bannerUrl) ? "banner" : "background"),
+    card_art_width: integerValue(item.card_art_width) || integerValue(item.cardArtWidth) || integerValue(item.background_width) || integerValue(item.backgroundWidth) || null,
+    card_art_height: integerValue(item.card_art_height) || integerValue(item.cardArtHeight) || integerValue(item.background_height) || integerValue(item.backgroundHeight) || null,
     poster_storage_path: null,
     poster_retrieval_status: poster ? "not_copied" : "not_available",
     metadata_provider: "tvdb",

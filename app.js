@@ -4,7 +4,7 @@ import { createMetadataProvider, normalizeProviderTitle, parseImdbId } from "./p
 
 const BOARD_FALLBACK_POLL_MS = 60000;
 const SAVE_DEBOUNCE_MS = 650;
-const DRAG_HOLD_DELAY_MS = 400;
+const DRAG_HOLD_DELAY_MS = 250;
 const DRAG_CANCEL_MOVE_PX = 8;
 const REMINDER_DISMISSED_KEY = "fff.unrankedReminder.dismissed";
 
@@ -1052,7 +1052,7 @@ function posterMarkup(show) {
 }
 
 function backgroundMarkup(show) {
-  const url = show.backgroundUrl || show.background_url || show.bannerUrl || show.banner_url || show.backdropUrl || show.backdrop_url || "";
+  const url = show.cardArtUrl || show.card_art_url || show.cardArtSourceUrl || show.card_art_source_url || show.backgroundUrl || show.background_url || show.bannerUrl || show.banner_url || show.backdropUrl || show.backdrop_url || show.posterUrl || show.poster_url || "";
   if (url) {
     const showId = show.id || show.showId || show.show_id || "";
     const imdbId = show.imdbId || show.imdb_id || "";
