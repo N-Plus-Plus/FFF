@@ -274,6 +274,7 @@ function normalizeShow(show, config = null) {
     releaseYear: show.release_year || show.releaseYear || null,
     titleType: show.title_type || show.titleType || null,
     seriesStatus: show.series_status || show.seriesStatus || null,
+    totalSeasonCount: show.total_season_count ?? show.totalSeasonCount ?? show.metadata?.total_season_count ?? show.metadata?.totalSeasonCount ?? show.metadata?.tvmaze_season_count ?? null,
     totalEpisodeCount: show.total_episode_count ?? show.totalEpisodeCount ?? null,
     totalRuntimeMinutes: show.total_runtime_minutes ?? show.totalRuntimeMinutes ?? null,
     metadataProvider: show.metadata_provider || show.metadataProvider || null,
@@ -284,6 +285,9 @@ function normalizeShow(show, config = null) {
     posterRetrievalStatus: show.poster_retrieval_status || show.posterRetrievalStatus || "",
     posterUpdatedAt: show.poster_updated_at || show.posterUpdatedAt || null,
     posterUrl: posterStoragePath ? posterPublicUrl(config, posterStoragePath) : "",
+    backgroundUrl: show.background_url || show.backgroundUrl || show.banner_url || show.bannerUrl || show.backdrop_url || show.backdropUrl || "",
+    bannerUrl: show.banner_url || show.bannerUrl || show.background_url || show.backgroundUrl || show.backdrop_url || show.backdropUrl || "",
+    backdropUrl: show.backdrop_url || show.backdropUrl || show.background_url || show.backgroundUrl || "",
     disambiguation: show.disambiguation || "",
     currentUserNominated: Boolean(show.current_user_nominated || show.currentUserNominated),
     currentUserMayWithdraw: Boolean(show.current_user_may_withdraw || show.currentUserMayWithdraw),
@@ -309,6 +313,7 @@ function normalizeBoard(board, config = null) {
       releaseYear: entry.release_year || entry.releaseYear || null,
       titleType: entry.title_type || entry.titleType || null,
       seriesStatus: entry.series_status || entry.seriesStatus || null,
+      totalSeasonCount: entry.total_season_count ?? entry.totalSeasonCount ?? entry.metadata?.total_season_count ?? entry.metadata?.totalSeasonCount ?? entry.metadata?.tvmaze_season_count ?? null,
       totalEpisodeCount: entry.total_episode_count ?? entry.totalEpisodeCount ?? null,
       totalRuntimeMinutes: entry.total_runtime_minutes ?? entry.totalRuntimeMinutes ?? null,
       posterStoragePath: entry.poster_storage_path || entry.posterStoragePath || "",
@@ -316,6 +321,9 @@ function normalizeBoard(board, config = null) {
       posterUrl: entry.poster_storage_path || entry.posterStoragePath
         ? posterPublicUrl(config, entry.poster_storage_path || entry.posterStoragePath)
         : "",
+      backgroundUrl: entry.background_url || entry.backgroundUrl || entry.banner_url || entry.bannerUrl || entry.backdrop_url || entry.backdropUrl || "",
+      bannerUrl: entry.banner_url || entry.bannerUrl || entry.background_url || entry.backgroundUrl || entry.backdrop_url || entry.backdropUrl || "",
+      backdropUrl: entry.backdrop_url || entry.backdropUrl || entry.background_url || entry.backgroundUrl || "",
       disambiguation: entry.disambiguation || "",
       averageRank: entry.average_rank === null || entry.average_rank === undefined ? null : Number(entry.average_rank),
       provisionalScore: entry.provisional_score === null || entry.provisional_score === undefined

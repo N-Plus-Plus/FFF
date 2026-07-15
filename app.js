@@ -40,9 +40,15 @@ const appState = {
   ranked: [],
   unranked: [],
   searchResults: [],
+  searchLoading: false,
   board: { revision: 0, updatedAt: "", entries: [] },
   activeTab: "add",
   draggingShowId: null,
+  draggingSourceZone: "",
+  dragRankedInsertIndex: null,
+  dragStartX: 0,
+  dragStartY: 0,
+  dragMoved: false,
   saveTimer: 0,
   saveVersion: 0,
   inFlightVersion: 0,
@@ -69,6 +75,7 @@ init().catch((error) => {
 async function init() {
   bindEvents();
   renderNotice();
+  refreshIcons();
   guardConfiguration();
   await loadApp();
   await startBoardRealtime();
@@ -87,11 +94,12 @@ function bindEvents() {
 
   dom.clearSearchButton.addEventListener("click", () => {
     appState.searchResults = [];
+    appState.searchLoading = false;
     dom.titleInput.value = "";
     renderSearchResults();
   });
 
-  dom.retrySaveButton.addEventListener("click", () => flushSaveQueue());
+  dom.retrySaveButton?.addEventListener("click", () => flushSaveQueue());
   dom.openOrderButton.addEventListener("click", () => setActiveTab("rank"));
   dom.dismissReminderButton.addEventListener("click", () => {
     appState.unrankedReminderDismissed = true;
@@ -150,6 +158,7 @@ function render() {
   renderOrder();
   renderUnrankedReminder();
   renderBoard();
+  refreshIcons();
 }
 
 function renderFatalError(message) {
@@ -175,13 +184,15 @@ function renderNotice() {
 
 function setLoading(message) {
   dom.userBadge.textContent = "Loading";
-  dom.searchResults.innerHTML = emptyState(message);
+  dom.searchResults.hidden = true;
+  dom.searchResults.replaceChildren();
   dom.rankedList.innerHTML = emptyState(message);
   dom.unrankedList.innerHTML = "";
   dom.leaderboardList.innerHTML = emptyState(message);
 }
 
 function setActiveTab(tabName) {
+  const tabChanged = appState.activeTab !== tabName;
   appState.activeTab = tabName;
   dom.tabs.forEach((tab) => {
     const isActive = tab.dataset.tab === tabName;
@@ -194,6 +205,9 @@ function setActiveTab(tabName) {
   if (tabName === "board") {
     refreshBoard("Opened Board");
   }
+  if (tabChanged) {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }
 }
 
 async function searchShows() {
@@ -203,15 +217,19 @@ async function searchShows() {
     return;
   }
 
-  dom.searchResults.innerHTML = emptyState(parseImdbId(query) ? "Looking up IMDb title" : "Searching TVmaze");
+  appState.searchLoading = true;
+  appState.searchResults = [];
+  renderSearchResults();
   try {
     appState.searchResults = await metadataProvider.search(query);
+    appState.searchLoading = false;
     renderSearchResults();
     if (!appState.searchResults.length) {
       showToast("No matching television titles found.", "error");
     }
   } catch (error) {
     appState.searchResults = [];
+    appState.searchLoading = false;
     renderSearchResults();
     showToast(error.message, "error");
   }
@@ -264,11 +282,19 @@ async function reloadOrderAndCatalogue() {
 }
 
 function renderSearchResults() {
-  if (!appState.searchResults.length) {
-    dom.searchResults.innerHTML = emptyState("TV show search results will appear here.");
+  if (appState.searchLoading) {
+    dom.searchResults.hidden = false;
+    dom.searchResults.innerHTML = emptyState("Loading...");
     return;
   }
 
+  if (!appState.searchResults.length) {
+    dom.searchResults.hidden = true;
+    dom.searchResults.replaceChildren();
+    return;
+  }
+
+  dom.searchResults.hidden = false;
   dom.searchResults.replaceChildren(...appState.searchResults.map((result) => {
     const show = normalizeProviderTitle(result);
     const known = findKnownShow(show.imdbId);
@@ -278,7 +304,7 @@ function renderSearchResults() {
     card.innerHTML = `
       ${posterMarkup(show)}
       <div class="show-meta">
-        <p class="show-title">${escapeHtml(show.title)}</p>
+        ${titleMarkup(show)}
         ${metadataMarkup(show)}
         <p class="show-subtitle">${escapeHtml(status)}</p>
       </div>
@@ -301,13 +327,12 @@ function renderCatalogue() {
 
 function catalogueCard(show) {
   const card = document.createElement("article");
-  card.className = "result-card";
+  card.className = "result-card result-card--catalogue";
   card.innerHTML = `
-    ${posterMarkup(show)}
+    ${backgroundMarkup(show)}
     <div class="show-meta">
-      <p class="show-title">${escapeHtml(show.title)}</p>
+      ${titleMarkup(show)}
       ${metadataMarkup(show)}
-      <p class="show-subtitle">${escapeHtml(showStatusText(show))}</p>
     </div>
     <div class="card-actions"></div>
   `;
@@ -318,36 +343,39 @@ function catalogueCard(show) {
 
 function renderShowActions(container, show, options = {}) {
   container.replaceChildren();
-  const imdbLink = imdbLinkMarkup(show);
-  if (imdbLink) {
-    container.append(htmlToElement(imdbLink));
-  }
   const known = show.id ? show : findKnownShow(show.imdbId);
 
   if (known?.isAdminRemoved) {
-    container.append(disabledButton("Removed"));
+    container.append(disabledButton("Removed", "ban"));
     return;
   }
 
   if (known?.currentUserNominated) {
-    container.append(actionButton("Withdraw", "button--neutral", () => withdrawNomination(known.id)));
+    container.append(actionButton("Withdraw", "button--destructive", () => withdrawNomination(known.id), "circle-minus"));
   } else {
-    container.append(actionButton("Nominate", "button--constructive", () => nominateResult(options.searchResult || show)));
+    container.append(actionButton("Nominate", "button--constructive", () => nominateResult(options.searchResult || show), "circle-plus"));
   }
 
   if (known?.id && appState.currentUser?.isAdmin) {
-    container.append(actionButton("Remove", "button--destructive", () => removeShow(known.id)));
+    container.append(actionButton("Remove", "button--destructive", () => removeShow(known.id), "trash-2"));
   }
+  refreshIcons(container);
 }
 
 function renderOrder() {
   renderSaveStatus();
   renderUnrankedReminder();
+  const rankedChildren = appState.ranked.map((show, index) => rankedCard(show, index));
+  const shouldShowRankedPlaceholder = appState.draggingShowId && appState.dragRankedInsertIndex !== null;
+  if (shouldShowRankedPlaceholder) {
+    const insertIndex = Math.max(0, Math.min(appState.dragRankedInsertIndex, rankedChildren.length));
+    rankedChildren.splice(insertIndex, 0, rankedDropPlaceholder());
+  }
 
-  if (!appState.ranked.length) {
+  if (!rankedChildren.length) {
     dom.rankedList.innerHTML = emptyState("No ranked shows yet.");
   } else {
-    dom.rankedList.replaceChildren(...appState.ranked.map((show, index) => rankedCard(show, index)));
+    dom.rankedList.replaceChildren(...rankedChildren);
   }
 
   if (!appState.unranked.length) {
@@ -355,6 +383,7 @@ function renderOrder() {
   } else {
     dom.unrankedList.replaceChildren(...appState.unranked.map((show) => unrankedCard(show)));
   }
+  refreshIcons();
 }
 
 function rankedCard(show, index) {
@@ -362,19 +391,18 @@ function rankedCard(show, index) {
   card.className = "show-card";
   card.dataset.showId = show.id;
   card.dataset.zone = "ranked";
-  card.classList.toggle("is-dragging", appState.draggingShowId === show.id);
+    card.classList.toggle("is-dragging", appState.draggingShowId === show.id);
   card.innerHTML = `
     <div class="rank-number">${index + 1}</div>
-    ${posterMarkup(show)}
-    <div class="show-meta">
-      <p class="show-title">${escapeHtml(show.title)}</p>
+      ${backgroundMarkup(show)}
+      <div class="show-meta">
+      ${titleMarkup(show)}
       ${metadataMarkup(show)}
     </div>
     <div class="rank-controls" aria-label="Move ${escapeAttribute(show.title)}">
-      ${imdbLinkMarkup(show)}
-      <button class="icon-button" type="button" data-move="up" aria-label="Move up">Up</button>
-      <button class="icon-button" type="button" data-move="down" aria-label="Move down">Dn</button>
-      <button class="icon-button" type="button" data-remove aria-label="Remove from ranking">X</button>
+      <button class="icon-button" type="button" data-move="up" aria-label="Move up"><i data-lucide="arrow-up" aria-hidden="true"></i></button>
+      <button class="icon-button" type="button" data-move="down" aria-label="Move down"><i data-lucide="arrow-down" aria-hidden="true"></i></button>
+      <button class="icon-button" type="button" data-remove aria-label="Remove from ranking"><i data-lucide="x" aria-hidden="true"></i></button>
     </div>
   `;
   card.querySelector('[data-move="up"]').disabled = index === 0;
@@ -383,6 +411,7 @@ function rankedCard(show, index) {
   card.querySelector('[data-move="down"]').addEventListener("click", () => moveRanked(show.id, 1));
   card.querySelector("[data-remove]").addEventListener("click", () => unrankShow(show.id));
   card.addEventListener("pointerdown", beginDrag);
+  suppressCardContextMenu(card);
   wireInteractiveControls(card);
   return card;
 }
@@ -391,21 +420,31 @@ function unrankedCard(show) {
   const card = document.createElement("article");
   card.className = "show-card show-card--unranked";
   card.dataset.showId = show.id;
+  card.dataset.zone = "unranked";
+  card.classList.toggle("is-dragging", appState.draggingShowId === show.id);
   card.innerHTML = `
     <div class="rank-number">-</div>
-    ${posterMarkup(show)}
-    <div class="show-meta">
-      <p class="show-title">${escapeHtml(show.title)}</p>
+      ${backgroundMarkup(show)}
+      <div class="show-meta">
+      ${titleMarkup(show)}
       ${metadataMarkup(show)}
     </div>
     <div class="rank-controls">
-      ${imdbLinkMarkup(show)}
-      <button class="icon-button" type="button" data-rank aria-label="Add to ranking">+</button>
+      <button class="icon-button" type="button" data-rank aria-label="Add to ranking"><i data-lucide="plus" aria-hidden="true"></i></button>
     </div>
   `;
   card.querySelector("[data-rank]").addEventListener("click", () => rankShow(show.id));
+  card.addEventListener("pointerdown", beginDrag);
+  suppressCardContextMenu(card);
   wireInteractiveControls(card);
   return card;
+}
+
+function rankedDropPlaceholder() {
+  const element = document.createElement("div");
+  element.className = "rank-drop-placeholder";
+  element.setAttribute("aria-hidden", "true");
+  return element;
 }
 
 function beginDrag(event) {
@@ -414,6 +453,13 @@ function beginDrag(event) {
   }
   const card = event.currentTarget;
   appState.draggingShowId = card.dataset.showId;
+  appState.draggingSourceZone = card.dataset.zone || "";
+  appState.dragRankedInsertIndex = appState.draggingSourceZone === "ranked"
+    ? appState.ranked.findIndex((show) => show.id === appState.draggingShowId)
+    : null;
+  appState.dragStartX = event.clientX;
+  appState.dragStartY = event.clientY;
+  appState.dragMoved = false;
   card.setPointerCapture(event.pointerId);
   card.classList.add("is-dragging");
   document.addEventListener("pointermove", dragMove);
@@ -425,30 +471,80 @@ function dragMove(event) {
   if (!appState.draggingShowId) {
     return;
   }
-  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.show-card[data-zone="ranked"]');
-  if (!target || target.dataset.showId === appState.draggingShowId) {
+  if (Math.hypot(event.clientX - appState.dragStartX, event.clientY - appState.dragStartY) > 8) {
+    appState.dragMoved = true;
+  }
+  const nextIndex = rankedInsertIndexFromPoint(event.clientX, event.clientY);
+  if (nextIndex === appState.dragRankedInsertIndex) {
     return;
   }
-  const targetIndex = appState.ranked.findIndex((show) => show.id === target.dataset.showId);
-  const draggedIndex = appState.ranked.findIndex((show) => show.id === appState.draggingShowId);
-  if (targetIndex === -1 || draggedIndex === -1 || targetIndex === draggedIndex) {
+  updateOrderWithMotion(() => {
+    appState.dragRankedInsertIndex = nextIndex;
+  });
+}
+
+function rankedInsertIndexFromPoint(x, y) {
+  const rankedRect = dom.rankedList.getBoundingClientRect();
+  if (x < rankedRect.left || x > rankedRect.right || y < rankedRect.top || y > rankedRect.bottom) {
+    return null;
+  }
+
+  const cards = Array.from(dom.rankedList.querySelectorAll('.show-card[data-zone="ranked"]'))
+    .filter((card) => card.dataset.showId !== appState.draggingShowId);
+  if (!cards.length) {
+    return 0;
+  }
+
+  for (const card of cards) {
+    const rect = card.getBoundingClientRect();
+    if (y < rect.top + rect.height / 2) {
+      const id = card.dataset.showId;
+      return appState.ranked.findIndex((show) => show.id === id);
+    }
+  }
+  return appState.ranked.length;
+}
+
+function commitRankedDrag() {
+  if (!appState.draggingShowId || appState.dragRankedInsertIndex === null) {
     return;
   }
-  const [show] = appState.ranked.splice(draggedIndex, 1);
-  appState.ranked.splice(targetIndex, 0, show);
+  const sourceZone = appState.draggingSourceZone;
+  const showId = appState.draggingShowId;
+  const sourceList = sourceZone === "unranked" ? appState.unranked : appState.ranked;
+  const sourceIndex = sourceList.findIndex((show) => show.id === showId);
+  if (sourceIndex === -1) {
+    return;
+  }
+
+  const [show] = sourceList.splice(sourceIndex, 1);
+  let insertIndex = Math.max(0, Math.min(appState.dragRankedInsertIndex, appState.ranked.length));
+  if (sourceZone === "ranked" && sourceIndex < insertIndex) {
+    insertIndex -= 1;
+  }
+  if (sourceZone === "ranked" && sourceIndex === insertIndex) {
+    appState.ranked.splice(sourceIndex, 0, show);
+    return;
+  }
+  appState.ranked.splice(insertIndex, 0, show);
   markRankingChanged();
-  renderOrder();
 }
 
 function endDrag() {
   clearDragListeners();
-  appState.draggingShowId = null;
-  renderOrder();
+  updateOrderWithMotion(() => {
+    if (appState.draggingSourceZone === "unranked" && !appState.dragMoved && appState.dragRankedInsertIndex === null) {
+      rankShow(appState.draggingShowId, { render: false });
+    } else {
+      commitRankedDrag();
+    }
+    clearDragState();
+  });
 }
 
 function cancelDrag() {
   clearDragListeners();
-  appState.draggingShowId = null;
+  clearDragState();
   renderOrder();
 }
 
@@ -456,6 +552,57 @@ function clearDragListeners() {
   document.removeEventListener("pointermove", dragMove);
   document.removeEventListener("pointerup", endDrag);
   document.removeEventListener("pointercancel", cancelDrag);
+}
+
+function clearDragState() {
+  appState.draggingShowId = null;
+  appState.draggingSourceZone = "";
+  appState.dragRankedInsertIndex = null;
+  appState.dragStartX = 0;
+  appState.dragStartY = 0;
+  appState.dragMoved = false;
+}
+
+function updateOrderWithMotion(mutator) {
+  const before = snapshotOrderCardRects();
+  mutator();
+  renderOrder();
+  animateOrderCardMoves(before);
+}
+
+function snapshotOrderCardRects() {
+  const rects = new Map();
+  [...dom.rankedList.querySelectorAll(".show-card"), ...dom.unrankedList.querySelectorAll(".show-card")].forEach((card) => {
+    if (card.dataset.showId) {
+      rects.set(card.dataset.showId, card.getBoundingClientRect());
+    }
+  });
+  return rects;
+}
+
+function animateOrderCardMoves(before) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+  [...dom.rankedList.querySelectorAll(".show-card"), ...dom.unrankedList.querySelectorAll(".show-card")].forEach((card) => {
+    const previous = before.get(card.dataset.showId);
+    if (!previous || typeof card.animate !== "function") {
+      return;
+    }
+    const current = card.getBoundingClientRect();
+    const dx = previous.left - current.left;
+    const dy = previous.top - current.top;
+    if (!dx && !dy) {
+      return;
+    }
+    card.animate([
+      { transform: `translate(${dx}px, ${dy}px)` },
+      { transform: "translate(0, 0)" }
+    ], {
+      duration: 180,
+      easing: "cubic-bezier(0.2, 0, 0, 1)"
+    });
+  });
 }
 
 function moveRanked(showId, direction) {
@@ -470,7 +617,7 @@ function moveRanked(showId, direction) {
   renderOrder();
 }
 
-function rankShow(showId) {
+function rankShow(showId, options = {}) {
   const index = appState.unranked.findIndex((show) => show.id === showId);
   if (index === -1) {
     return;
@@ -478,7 +625,9 @@ function rankShow(showId) {
   const [show] = appState.unranked.splice(index, 1);
   appState.ranked.push(show);
   markRankingChanged();
-  renderOrder();
+  if (options.render !== false) {
+    renderOrder();
+  }
 }
 
 function unrankShow(showId) {
@@ -538,6 +687,9 @@ async function flushSaveQueue() {
 }
 
 function renderSaveStatus() {
+  if (!dom.sequenceStatus || !dom.retrySaveButton) {
+    return;
+  }
   const labels = {
     idle: "No changes",
     saving: "Saving",
@@ -590,23 +742,18 @@ function renderBoard() {
     const card = document.createElement("article");
     card.className = "leader-card";
     card.classList.toggle("is-unconfirmed", !entry.isConfirmed);
-    const stateText = entry.isConfirmed ? "Confirmed" : "Unconfirmed";
     card.innerHTML = `
       <div class="leader-position">${entry.aggregatePosition || index + 1}</div>
-      ${posterMarkup(entry)}
+      ${backgroundMarkup(entry)}
       <div class="show-meta">
-        <p class="show-title">${escapeHtml(entry.title)}</p>
+        ${titleMarkup(entry)}
         ${metadataMarkup(entry)}
-        <p class="show-subtitle"><span aria-label="Board state">${stateText}</span> / ${entry.rankedCount} ranked</p>
-      </div>
-      <div class="leader-stats">
-        ${imdbLinkMarkup(entry)}
-        <span aria-hidden="true">${entry.isConfirmed ? "OK" : "..."}</span>
       </div>
     `;
     wireInteractiveControls(card);
     return card;
   }));
+  refreshIcons();
 }
 
 async function startBoardRealtime() {
@@ -660,33 +807,49 @@ function showStatusText(show) {
 }
 
 function formatShowSubtitle(show) {
-  const parts = [];
-  if (show.releaseYear) {
-    parts.push(show.releaseYear);
+  return show.releaseYear || show.totalEpisodeCount || show.totalRuntimeMinutes ? "" : "IMDb title";
+}
+
+function titleMarkup(show) {
+  const imdbId = show.imdbId || show.imdb_id;
+  const title = escapeHtml(show.title);
+  if (!imdbId) {
+    return `<p class="show-title">${title}</p>`;
   }
-  if (show.titleType) {
-    parts.push(show.titleType);
-  }
-  if (show.seriesStatus) {
-    parts.push(show.seriesStatus);
-  }
-  if (show.totalEpisodeCount) {
-    parts.push(`${show.totalEpisodeCount} episodes`);
-  }
-  if (show.totalRuntimeMinutes) {
-    parts.push(formatRuntime(show.totalRuntimeMinutes));
-  }
-  if (show.imdbId) {
-    parts.push(show.imdbId);
-  }
-  if (show.disambiguation) {
-    parts.push(show.disambiguation);
-  }
-  return parts.join(" / ") || "IMDb title";
+  return `
+    <p class="show-title">
+      <a class="show-title__link" href="https://www.imdb.com/title/${escapeAttribute(imdbId)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Open ${escapeAttribute(show.title || "show")} on IMDb">
+        ${title}
+      </a>
+    </p>
+  `;
 }
 
 function metadataMarkup(show) {
-  return `<p class="show-subtitle">${escapeHtml(formatShowSubtitle(show))}</p>`;
+  const rows = [];
+  if (show.releaseYear) {
+    rows.push(show.releaseYear);
+  }
+  if (show.totalEpisodeCount) {
+    rows.push(formatEpisodeCount(show));
+  }
+  if (show.totalRuntimeMinutes) {
+    rows.push(`Runtime: ${formatRuntime(show.totalRuntimeMinutes)}`);
+  }
+  if (!rows.length) {
+    rows.push(formatShowSubtitle(show));
+  }
+  return rows.map((row) => `<p class="show-subtitle">${escapeHtml(row)}</p>`).join("");
+}
+
+function formatEpisodeCount(show) {
+  const episodeCount = Number(show.totalEpisodeCount);
+  const seasonCount = Number(show.totalSeasonCount ?? show.metadata?.totalSeasonCount ?? show.metadata?.total_season_count ?? show.metadata?.tvmaze_season_count);
+  const episodeText = `${episodeCount} episode${episodeCount === 1 ? "" : "s"}`;
+  if (!Number.isFinite(seasonCount) || seasonCount <= 0) {
+    return episodeText;
+  }
+  return `${seasonCount} season${seasonCount === 1 ? "" : "s"}, ${episodeText}`;
 }
 
 function formatRuntime(minutes) {
@@ -710,20 +873,24 @@ function posterMarkup(show) {
   return '<div class="poster">TV</div>';
 }
 
-function imdbLinkMarkup(show) {
-  if (!show.imdbId && !show.imdb_id) {
-    return "";
+function backgroundMarkup(show) {
+  const url = show.backgroundUrl || show.background_url || show.bannerUrl || show.banner_url || show.backdropUrl || show.backdrop_url || show.posterUrl || show.poster_url || "";
+  if (url) {
+    return `<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false"></div>`;
   }
-  const imdbId = show.imdbId || show.imdb_id;
-  return `
-    <a class="icon-button imdb-link" href="https://www.imdb.com/title/${escapeAttribute(imdbId)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Open ${escapeAttribute(show.title || "show")} on IMDb" title="Open on IMDb">
-      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M15 3h6v6"></path>
-        <path d="M10 14 21 3"></path>
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-      </svg>
-    </a>
-  `;
+  return '<div class="card-background">TV</div>';
+}
+
+function suppressCardContextMenu(card) {
+  card.addEventListener("contextmenu", (event) => {
+    if (event.target.closest("button, input, select, textarea")) {
+      return;
+    }
+    event.preventDefault();
+  });
+  card.querySelectorAll("img").forEach((image) => {
+    image.addEventListener("dragstart", (event) => event.preventDefault());
+  });
 }
 
 function wireInteractiveControls(root) {
@@ -738,7 +905,7 @@ function renderUnrankedReminder() {
   dom.unrankedBadge.textContent = String(count);
   dom.unrankedReminder.hidden = count === 0 || appState.unrankedReminderDismissed;
   dom.unrankedReminderTitle.textContent = `${count} unranked show${count === 1 ? "" : "s"}`;
-  dom.unrankedReminderText.textContent = "Order is waiting. Rank them or leave them unranked until you have an opinion.";
+  dom.unrankedReminderText.textContent = "Get ranking!";
 }
 
 function sectionLabel(text) {
@@ -748,19 +915,23 @@ function sectionLabel(text) {
   return element;
 }
 
-function actionButton(text, modifier, handler) {
+function actionButton(text, modifier, handler, iconName = "") {
   const button = document.createElement("button");
   button.className = `button ${modifier}`;
   button.type = "button";
-  button.textContent = text;
+  button.innerHTML = `${iconName ? `<i data-lucide="${escapeAttribute(iconName)}" aria-hidden="true"></i>` : ""}<span>${escapeHtml(text)}</span>`;
   button.addEventListener("click", handler);
   return button;
 }
 
-function disabledButton(text) {
-  const button = actionButton(text, "button--neutral", () => {});
+function disabledButton(text, iconName = "") {
+  const button = actionButton(text, "button--neutral", () => {}, iconName);
   button.disabled = true;
   return button;
+}
+
+function refreshIcons(root = document) {
+  window.lucide?.createIcons({ attrs: { "stroke-width": 2.2 }, nameAttr: "data-lucide" });
 }
 
 function emptyState(message) {

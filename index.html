@@ -4,18 +4,24 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#222222">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>FFF TV Ranking</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <script>
+      window.FFF_CACHE_BUSTER = String(Date.now());
+      document.write(`<link rel="stylesheet" href="style.css?v=${window.FFF_CACHE_BUSTER}">`);
+      document.write(`<script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js?v=${window.FFF_CACHE_BUSTER}"><\/script>`);
+    </script>
   </head>
   <body>
     <div id="app" class="app-shell">
       <header class="app-header">
         <div>
-          <p class="eyebrow">Shared watch list</p>
-          <h1>TV rankings</h1>
+          <h1>From Friday Fixer</h1>
         </div>
         <div id="userBadge" class="user-badge" aria-live="polite">Loading</div>
       </header>
@@ -27,15 +33,14 @@
             <p id="unrankedReminderText">Some active shows still need your ranking opinion.</p>
           </div>
           <div class="unranked-reminder__actions">
-            <button id="openOrderButton" class="button button--modify" type="button">Open Order</button>
-            <button id="dismissReminderButton" class="icon-button" type="button" aria-label="Dismiss unranked reminder">X</button>
+            <button id="openOrderButton" class="button button--jeans" type="button"><i data-lucide="list-ordered" aria-hidden="true"></i><span>Order</span></button>
+            <button id="dismissReminderButton" class="icon-button" type="button" aria-label="Dismiss unranked reminder"><i data-lucide="x" aria-hidden="true"></i></button>
           </div>
         </div>
 
         <section id="panel-add" class="panel is-active" data-panel="add" aria-labelledby="tab-add">
           <div class="panel-heading">
             <h2>Add shows</h2>
-            <p>Paste an IMDb title link or ID, or search by television-show name.</p>
           </div>
 
           <form id="addForm" class="entry-form" autocomplete="off">
@@ -45,24 +50,20 @@
             </label>
 
             <div class="button-row">
-              <button class="button button--constructive" type="submit">Search</button>
-              <button id="clearSearchButton" class="button button--neutral" type="button">Clear</button>
+              <button class="button button--constructive" type="submit"><i data-lucide="search" aria-hidden="true"></i><span>Search</span></button>
+              <button id="clearSearchButton" class="button button--neutral" type="button"><i data-lucide="x" aria-hidden="true"></i><span>Clear</span></button>
             </div>
           </form>
 
           <div id="appNotice" class="notice" hidden></div>
-          <div id="searchResults" class="results-list" aria-live="polite"></div>
+          <div id="searchResults" class="results-list" aria-live="polite" hidden></div>
           <div id="catalogueList" class="results-list" aria-live="polite"></div>
         </section>
 
         <section id="panel-rank" class="panel" data-panel="rank" aria-labelledby="tab-rank">
           <div class="panel-heading">
             <h2>Your order</h2>
-            <p>Drag ranked cards, move unranked shows in, or remove ranked shows from your sequence.</p>
-          </div>
-          <div class="sequence-toolbar">
-            <span id="sequenceStatus" class="status-pill">No changes</span>
-            <button id="retrySaveButton" class="button button--modify" type="button" hidden>Retry</button>
+            <p>Drag or <i class="inline-copy-icon" data-lucide="arrow-up" aria-label="up"></i> / <i class="inline-copy-icon" data-lucide="arrow-down" aria-label="down"></i> to register your preference order!</p>
           </div>
           <h3 class="list-heading">Ranked</h3>
           <div id="rankedList" class="sequence-list" aria-live="polite"></div>
@@ -73,7 +74,7 @@
         <section id="panel-board" class="panel" data-panel="board" aria-labelledby="tab-board">
           <div class="panel-heading">
             <h2>Group board</h2>
-            <p>A provisional cumulative order based only on rankings people have actually made.</p>
+            <p>As voted by you, here is the watch order!</p>
           </div>
           <div id="boardStatus" class="status-line" aria-live="polite">Not refreshed yet</div>
           <div id="leaderboardList" class="leaderboard-list" aria-live="polite"></div>
@@ -88,14 +89,12 @@
         </button>
         <button id="tab-board" class="bottom-tab" type="button" data-tab="board" aria-controls="panel-board" aria-selected="false">Board</button>
       </nav>
-
-      <footer class="provider-attribution">
-        TV metadata by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">TVmaze</a>
-      </footer>
     </div>
 
     <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
 
-    <script type="module" src="app.js"></script>
+    <script>
+      document.write(`<script type="module" src="app.js?v=${window.FFF_CACHE_BUSTER}"><\/script>`);
+    </script>
   </body>
 </html>

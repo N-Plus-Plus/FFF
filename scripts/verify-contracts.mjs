@@ -263,8 +263,7 @@ function verifyTextContracts() {
   assert.doesNotMatch(rootFiles.app, /Score /, "ordinary Board UI does not display numeric aggregate score");
   assert.match(rootFiles.app, /sessionStorage\.setItem\(REMINDER_DISMISSED_KEY/, "unranked reminder dismissal is session scoped");
   assert.match(rootFiles.index, /dismissReminderButton/, "unranked reminder has dismiss control");
-  assert.match(rootFiles.index, /https:\/\/www\.tvmaze\.com\//, "TVmaze attribution link is visible in the app shell");
-  assert.match(rootFiles.index, /referrerpolicy="no-referrer"/, "TVmaze attribution avoids referrer leakage");
+  assert.doesNotMatch(rootFiles.index, /RV metadata by TVMaze/i, "legacy TVMaze attribution copy stays out of the app shell");
   assert.doesNotMatch(rootFiles.app, /nominators/, "browser UI does not render nominator names");
   assert.doesNotMatch(rootFiles.store, /nominators/, "frontend state does not normalize nominator names");
 

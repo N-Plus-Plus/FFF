@@ -173,6 +173,7 @@ export function normalizeProviderTitle(input) {
   }
 
   const posterSourceUrl = input.poster_source_url || input.posterSourceUrl || input.poster_url || input.posterUrl || "";
+  const backgroundUrl = input.background_url || input.backgroundUrl || input.banner_url || input.bannerUrl || input.backdrop_url || input.backdropUrl || "";
   const runtimeIsEstimate = Boolean(input.total_runtime_is_estimate || input.totalRuntimeIsEstimate || input.runtime_is_estimate || input.runtimeIsEstimate);
   return {
     imdbId: input.imdb_id || input.imdbId || "",
@@ -180,10 +181,14 @@ export function normalizeProviderTitle(input) {
     releaseYear: input.release_year || input.releaseYear || null,
     titleType,
     seriesStatus: input.series_status || input.seriesStatus || null,
+    totalSeasonCount: input.total_season_count ?? input.totalSeasonCount ?? input.season_count ?? input.seasonCount ?? input.metadata?.total_season_count ?? input.metadata?.totalSeasonCount ?? input.metadata?.tvmaze_season_count ?? null,
     totalEpisodeCount: input.total_episode_count ?? input.totalEpisodeCount ?? null,
     totalRuntimeMinutes: runtimeIsEstimate ? null : input.total_runtime_minutes ?? input.totalRuntimeMinutes ?? null,
     posterUrl: input.poster_url || input.posterUrl || posterSourceUrl,
     posterSourceUrl,
+    backgroundUrl,
+    bannerUrl: input.banner_url || input.bannerUrl || backgroundUrl,
+    backdropUrl: input.backdrop_url || input.backdropUrl || backgroundUrl,
     posterStoragePath: input.poster_storage_path || input.posterStoragePath || "",
     posterRetrievalStatus: input.poster_retrieval_status || input.posterRetrievalStatus || "",
     posterUpdatedAt: input.poster_updated_at || input.posterUpdatedAt || null,
@@ -210,10 +215,14 @@ export function mergePrimaryAndTvdbMetadata(primaryInput, tvdbInput = null, reta
     releaseYear: firstPresent(primary.releaseYear, retained.releaseYear),
     titleType: firstPresent(primary.titleType, retained.titleType),
     seriesStatus: firstPresent(primary.seriesStatus, tvdb?.seriesStatus, retained.seriesStatus),
+    totalSeasonCount: firstPresent(primary.totalSeasonCount, tvdb?.totalSeasonCount, retained.totalSeasonCount),
     totalEpisodeCount: firstPresent(primary.totalEpisodeCount, tvdb?.totalEpisodeCount, retained.totalEpisodeCount),
     totalRuntimeMinutes: firstPresent(primary.totalRuntimeMinutes, tvdb?.totalRuntimeMinutes, retained.totalRuntimeMinutes),
     posterUrl: firstPresent(primary.posterUrl, tvdb?.posterUrl, retained.posterUrl),
     posterSourceUrl: firstPresent(primary.posterSourceUrl, tvdb?.posterSourceUrl, retained.posterSourceUrl),
+    backgroundUrl: firstPresent(primary.backgroundUrl, tvdb?.backgroundUrl, retained.backgroundUrl),
+    bannerUrl: firstPresent(primary.bannerUrl, tvdb?.bannerUrl, retained.bannerUrl),
+    backdropUrl: firstPresent(primary.backdropUrl, tvdb?.backdropUrl, retained.backdropUrl),
     metadataProvider: primary.metadataProvider,
     providerRecordId: primary.providerRecordId,
     tvdbRecordId: tvdb?.providerRecordId || retained.tvdbRecordId || null,
@@ -225,9 +234,12 @@ export function mergePrimaryAndTvdbMetadata(primaryInput, tvdbInput = null, reta
         canonical: "imdb",
         title: "primary",
         seriesStatus: primary.seriesStatus ? "primary" : tvdb?.seriesStatus ? "tvdb" : retained.seriesStatus ? "retained" : null,
+        totalSeasonCount: primary.totalSeasonCount != null ? "primary" : tvdb?.totalSeasonCount != null ? "tvdb" : retained.totalSeasonCount != null ? "retained" : null,
         totalEpisodeCount: primary.totalEpisodeCount != null ? "primary" : tvdb?.totalEpisodeCount != null ? "tvdb" : retained.totalEpisodeCount != null ? "retained" : null,
         totalRuntimeMinutes: primary.totalRuntimeMinutes != null ? "primary" : tvdb?.totalRuntimeMinutes != null ? "tvdb" : retained.totalRuntimeMinutes != null ? "retained" : null,
-        posterSourceUrl: primary.posterSourceUrl ? "primary" : tvdb?.posterSourceUrl ? "tvdb" : retained.posterSourceUrl ? "retained" : null
+        posterSourceUrl: primary.posterSourceUrl ? "primary" : tvdb?.posterSourceUrl ? "tvdb" : retained.posterSourceUrl ? "retained" : null,
+        backgroundUrl: primary.backgroundUrl ? "primary" : tvdb?.backgroundUrl ? "tvdb" : retained.backgroundUrl ? "retained" : null,
+        bannerUrl: primary.bannerUrl ? "primary" : tvdb?.bannerUrl ? "tvdb" : retained.bannerUrl ? "retained" : null
       }
     }
   };
@@ -246,10 +258,14 @@ export function normalizeTvdbFallback(input, canonicalImdbId) {
     imdbId,
     title: input.title || input.name || "",
     seriesStatus: input.series_status || input.seriesStatus || input.status || null,
+    totalSeasonCount: input.total_season_count ?? input.totalSeasonCount ?? input.season_count ?? input.seasonCount ?? null,
     totalEpisodeCount: input.total_episode_count ?? input.totalEpisodeCount ?? input.episode_count ?? input.episodeCount ?? null,
     totalRuntimeMinutes: runtimeIsEstimate ? null : input.total_runtime_minutes ?? input.totalRuntimeMinutes ?? input.runtime_minutes_total ?? null,
     posterUrl: input.poster_url || input.posterUrl || input.image_url || input.imageUrl || "",
     posterSourceUrl: input.poster_source_url || input.posterSourceUrl || input.poster_url || input.posterUrl || input.image_url || input.imageUrl || "",
+    backgroundUrl: input.background_url || input.backgroundUrl || input.banner_url || input.bannerUrl || input.backdrop_url || input.backdropUrl || "",
+    bannerUrl: input.banner_url || input.bannerUrl || input.background_url || input.backgroundUrl || input.backdrop_url || input.backdropUrl || "",
+    backdropUrl: input.backdrop_url || input.backdropUrl || input.background_url || input.backgroundUrl || input.banner_url || input.bannerUrl || "",
     metadataProvider: "tvdb",
     providerRecordId: input.tvdb_id || input.tvdbId || input.id || null,
     metadata: input

@@ -42,7 +42,7 @@ Run restoration only from an administrator-controlled database or service-role c
 
 ## Ordering and Board
 
-The Order screen has separate Ranked and Unranked sections. Newly nominated active shows appear as Unranked for every user and do not create ranking rows for users who have not expressed an opinion. A user ranks a show only by moving it into Ranked. Ranked positions are strict, unique, contiguous, and transactionally replaced through `replace_user_ranking`.
+The Order screen has separate Ranked and Unranked sections. Newly nominated active shows appear as Unranked for every user and do not create ranking rows for users who have not expressed an opinion. A user ranks a show only by moving it into Ranked, either with the add control, by tapping an Unranked card to append it, or by dragging directly from Unranked into a Ranked insertion slot. Long-press card context menus are suppressed so slow drag starts are not interrupted. Ranked positions are strict, unique, contiguous, and transactionally replaced through `replace_user_ranking`.
 
 The app persistently reminds valid users when they have active unranked shows: the Order tab shows a count and a non-blocking banner remains visible across Add, Order, and Board with a direct Order action. The banner has a dismiss control, and dismissal lasts only for the current browser session through `sessionStorage`. The reminder returns in a new browser session or when session state is cleared.
 
@@ -52,7 +52,7 @@ The Board candidate set contains active, non-removed shows with at least one ret
 
 The Board sequence is produced by repeated instant-runoff elections. The first election chooses first place from all eligible candidates. That winner is removed, the original ballots are filtered to the remaining candidates, and a fresh instant-runoff election chooses the next position. This repeats until every eligible candidate has a strict position. Exhausted ballots are ignored for the current election.
 
-The ordinary Board displays only aggregate sequence, number of users who ranked the show, and confirmed or unconfirmed state. It does not display aggregate numeric scores or algorithm explanation.
+The ordinary Board displays the aggregate sequence without per-card vote counts. Entries that do not yet have one vote from every active user remain in their aggregate position but render at reduced opacity. It does not display aggregate numeric scores or algorithm explanation.
 
 Confirmation is dynamic. For every Board calculation:
 
@@ -69,13 +69,13 @@ Aggregate ties are broken deterministically by canonical IMDb numeric value. Rem
 
 Canonical identity is always IMDb. The browser calls the `imdb` Edge Function for search, lookup, and enrolment. TVmaze is the primary television metadata provider and requires no API key. The Edge Function searches `https://api.tvmaze.com/search/shows?q={query}`, resolves exact canonical IMDb IDs with `https://api.tvmaze.com/lookup/shows?imdb={imdbId}`, and retrieves episodes from `https://api.tvmaze.com/shows/{tvmazeId}/episodes`.
 
-Canonical identity comes from TVmaze's `externals.imdb` field. Search results without an IMDb ID are rejected. Supported normalized metadata fields are canonical IMDb ID, title, premiered year, TVmaze type, series status, episode count, cumulative runtime when every TVmaze episode has an explicit runtime, poster source URL, source provider identity, TVmaze record ID, and retrieval timestamp. The app does not store or display synopsis, genre, season count, or estimated cumulative runtime.
+Canonical identity comes from TVmaze's `externals.imdb` field. Search results without an IMDb ID are rejected. Supported normalized metadata fields are canonical IMDb ID, title, premiered year, TVmaze type, series status, season count when available, episode count, cumulative runtime when every TVmaze episode has an explicit runtime, poster source URL, source provider identity, TVmaze record ID, and retrieval timestamp. The app does not store or display synopsis, genre, or estimated cumulative runtime.
 
 TVDB is only a fallback enrichment source after TVmaze successfully resolves canonical IMDb identity. It must not appear in the Add input UI, search choices, duplicate detection, canonical identity logic, show URLs, user-entered references, or ordinary provider status labels. TVDB may fill only missing supported metadata: series status, total episode count, exact provider-supplied total runtime, poster source when TVmaze has no usable poster, and TVDB record ID. TVDB output is discarded unless it includes an explicit IMDb cross-reference that normalizes exactly to the canonical IMDb ID. TVDB is not used when the TVmaze request fails, and it never overwrites valid TVmaze values.
 
-TVmaze data is licensed under CC BY-SA. The app includes visible attribution linking to TVmaze.
+TVmaze data is licensed under CC BY-SA. The current app shell does not render provider attribution copy in the Add UI.
 
-Show cards stay restrained: poster, title, year/type/status metadata, total episode count, exact runtime when known, nomination information, rank or aggregate position, required actions, and a dedicated IMDb external-link control. Runtime is displayed only when exact/provider-supplied; estimated cumulative runtime is not derived or shown.
+Show cards stay restrained: background image when available, title linked to IMDb when available, release year, season and episode count when known, exact runtime when known, rank or aggregate position, and required actions. Runtime is displayed only when exact/provider-supplied; estimated cumulative runtime is not derived or shown.
 
 ## Poster Storage
 
@@ -107,14 +107,18 @@ Revisions advance when catalogue activity, nomination counts, personal rankings,
 Serve the static files with any local web server:
 
 ```bash
-python -m http.server 8000
+.\start-local-server.bat
 ```
 
 Demo mode is explicit and local only:
 
 ```text
-http://localhost:8000/?demo=1
+http://localhost:3000/?demo=1
 ```
+
+The batch file serves the repository on `0.0.0.0:3000`, prints the local URL, and shows the LAN URL pattern for testing from another device on the same network. If Windows Firewall prompts for Python, allow private-network access for device testing.
+
+When testing live Supabase Edge Function calls from another device, the LAN origin printed by the batch file, such as `http://192.168.1.23:3000`, must also be present in the deployed `ALLOWED_ORIGINS` secret. Localhost and `127.0.0.1` testing on this computer are covered by the Edge Function's built-in loopback-origin allowance, regardless of the local server port.
 
 Production mode does not fall back to demo data. `config.js` must contain only:
 
@@ -149,7 +153,7 @@ The browser calls `supabase/functions/imdb` for search, lookup, and enrolment. E
 Required or supported secrets:
 
 ```bash
-supabase secrets set ALLOWED_ORIGINS="https://n-plus-plus.github.io,http://localhost:8000,http://127.0.0.1:8000"
+supabase secrets set ALLOWED_ORIGINS="https://n-plus-plus.github.io,http://<LAN_IP>:3000"
 supabase secrets set IMDB_TIMEOUT_MS="8000"
 supabase secrets set TVDB_IMDB_URL_TEMPLATE="https://tvdb-provider.example/by-imdb/{imdbId}"
 supabase secrets set TVDB_API_KEY="..."
@@ -201,7 +205,7 @@ Administrator/database helpers are not granted to `anon`:
 
 ## Current Remote Deployment Status
 
-The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260715000700` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb` and `metadata-refresh` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` is configured for `https://n-plus-plus.github.io`, `http://localhost:8000`, and `http://127.0.0.1:8000`. Weekly metadata refresh is not currently scheduled.
+The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260715000700` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb` and `metadata-refresh` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` must include the GitHub Pages origin plus any localhost or LAN origins used for local live testing. Weekly metadata refresh is not currently scheduled.
 
 Remaining manual deployment work:
 

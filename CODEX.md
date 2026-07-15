@@ -321,7 +321,7 @@ Replace this table as commands become established. Verify commands from the curr
 | Purpose | Command |
 | --- | --- |
 | Install dependencies | Not established |
-| Start development mode | `python -m http.server 8000` |
+| Start development mode | `.\start-local-server.bat` for port 3000 device testing, or `python -m http.server 3000 --bind 0.0.0.0` |
 | Build | Not applicable; static files are served directly |
 | Start production mode | GitHub Pages serves the repository files directly |
 | Targeted tests | `node --check app.js`; `node --check store.js`; `node --check providers.js`; `node --check ranking.js`; `node --check scripts/verify-contracts.mjs`; `node scripts/verify-contracts.mjs` |
@@ -338,6 +338,7 @@ Do not leave obsolete commands in this table after scripts are renamed or retire
 Current decisions:
 
 - The app is static and must run on GitHub Pages without a custom application server.
+- `index.html` deliberately appends a per-page-load cache-busting query string to local CSS and module assets so refreshes do not reuse stale UI files.
 - Supabase is the persistence backend. Browser code calls narrow RPC functions with a user link token and receives no direct table grants.
 - The catalogue is global and shared; `shows` is the canonical IMDb-deduplicated record, and nominations are a separate per-user concept. Multiple users may nominate the same show, but a user may have only one active nomination for a show.
 - Known users are manually administered outside the ordinary app UI.
@@ -345,9 +346,9 @@ Current decisions:
 - One known user can be marked administrator. Administrators may soft-remove active shows through the app; restoration is deliberately database/service-role only through `admin_restore_show`. Restoration clears the removal marker only, withdraws prior nominations, clears current ranking rows for that show, and leaves the show inactive until a fresh nomination.
 - `config.js` must contain only the Supabase project URL and publishable browser key.
 - Migration files in `supabase/migrations/` are the authoritative schema source. Do not restore `supabase-schema.sql` as a competing schema.
-- IMDb title IDs are the canonical provider boundary and are mandatory for enrolled shows. Browser code must use the Supabase Edge Function in `supabase/functions/imdb`, which owns external provider access. TVmaze is the primary television metadata provider, requires no API key, and is called through fixed public HTTPS endpoints for search, IMDb lookup, and episode retrieval. Canonical identity comes from TVmaze `externals.imdb`; reject TVmaze search results without an IMDb ID.
+- IMDb title IDs are the canonical provider boundary and are mandatory for enrolled shows. Browser code must use the Supabase Edge Function in `supabase/functions/imdb`, which owns external provider access and allows CORS from configured origins plus loopback local origins on any port. TVmaze is the primary television metadata provider, requires no API key, and is called through fixed public HTTPS endpoints for search, IMDb lookup, and episode retrieval. Canonical identity comes from TVmaze `externals.imdb`; reject TVmaze search results without an IMDb ID.
 - TVmaze cumulative runtime is exact only: sum explicit TVmaze episode `runtime` values, and leave cumulative runtime unknown if any retrieved episode lacks runtime. Do not estimate from average runtime or other derived fields.
-- TVmaze data is licensed under CC BY-SA; keep visible app attribution linking to TVmaze.
+- TVmaze data is licensed under CC BY-SA; the app shell currently does not render provider attribution copy in the Add UI.
 - TVDB is permitted only as fallback enrichment after TVmaze successfully resolves the canonical IMDb ID. It must include an explicit IMDb cross-reference that normalizes exactly to that canonical ID, may fill only absent supported fields, and must not run after primary-provider failure or appear in Add UI, search choices, canonical identity, duplicate detection, show URLs, or user-entered references.
 - Ranking changes auto-save through `replace_user_ranking`; active shows may be omitted and therefore remain unranked. Missing ranking rows mean no expressed opinion, not a last-place ranking. Withdrawal removes that user's current rank for the show, and final withdrawal clears current rankings for the show so future reactivation starts unranked for everyone.
 - The current Board aggregate strategy is isolated and identified as `sequential-irv-v1`. Each user's explicit ranked queue is a partial ranked-choice ballot; unranked shows are absent. The Board sequence is produced by repeated instant-runoff elections over active, non-removed shows with at least one retained ranking input. Retained rankings from inactive users still influence the election.

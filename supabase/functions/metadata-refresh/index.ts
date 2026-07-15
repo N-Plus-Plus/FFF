@@ -14,6 +14,7 @@ type NormalizedTitle = {
   release_year: number | null;
   title_type: string | null;
   series_status: string | null;
+  total_season_count: number | null;
   total_episode_count: number | null;
   total_runtime_minutes: number | null;
   poster_source_url: string | null;
@@ -178,6 +179,7 @@ async function enrichWithTvdbFallback(primary: NormalizedTitle) {
   return {
     ...primary,
     series_status: primary.series_status || tvdb.series_status,
+    total_season_count: primary.total_season_count ?? tvdb.total_season_count,
     total_episode_count: primary.total_episode_count ?? tvdb.total_episode_count,
     total_runtime_minutes: primary.total_runtime_minutes ?? tvdb.total_runtime_minutes,
     poster_source_url: primary.poster_source_url || tvdb.poster_source_url,
@@ -216,6 +218,7 @@ function metadataPayload(title: NormalizedTitle) {
     release_year: title.release_year,
     provider_title_type: title.title_type,
     series_status: title.series_status,
+    total_season_count: title.total_season_count,
     total_episode_count: title.total_episode_count,
     total_runtime_minutes: title.total_runtime_minutes,
     metadata_provider: title.metadata_provider,
@@ -375,6 +378,7 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
   const image = isRecord(show.image) ? show.image : {};
   const imdbId = normalizeImdbId(stringValue(externals.imdb));
   const episodeCount = episodes ? episodes.length : null;
+  const seasonCount = episodes ? totalSeasonCount(episodes) : null;
   const totalRuntime = episodes ? cumulativeExplicitRuntime(episodes) : null;
   const poster = stringValue(image.original) || stringValue(image.medium);
 
@@ -384,6 +388,7 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
     release_year: yearValue(show.premiered),
     title_type: stringValue(show.type) || "tvmaze-show",
     series_status: stringValue(show.status) || null,
+    total_season_count: seasonCount,
     total_episode_count: episodeCount,
     total_runtime_minutes: totalRuntime,
     poster_source_url: poster || null,
@@ -392,6 +397,8 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
     tvdb_record_id: null,
     metadata: {
       tvmaze: show,
+      total_season_count: seasonCount,
+      tvmaze_season_count: seasonCount,
       tvmaze_episode_count: episodeCount,
       tvmaze_runtime_complete: totalRuntime !== null,
       provenance: {
@@ -400,6 +407,7 @@ function normalizeTvmazeShow(show: Record<string, unknown>, episodes: Record<str
         release_year: "tvmaze",
         title_type: "tvmaze",
         series_status: "tvmaze",
+        total_season_count: seasonCount !== null ? "tvmaze_episodes" : null,
         total_episode_count: episodeCount !== null ? "tvmaze" : null,
         total_runtime_minutes: totalRuntime !== null ? "tvmaze_episodes" : null,
         poster_source_url: poster ? "tvmaze" : null
@@ -423,6 +431,17 @@ function cumulativeExplicitRuntime(episodes: Record<string, unknown>[]) {
   return total;
 }
 
+function totalSeasonCount(episodes: Record<string, unknown>[]) {
+  const seasons = new Set<number>();
+  for (const episode of episodes) {
+    const season = integerValue(episode.season);
+    if (season !== null && season > 0) {
+      seasons.add(season);
+    }
+  }
+  return seasons.size || null;
+}
+
 function normalizeTvdbTitle(item: Record<string, unknown>, canonicalImdbId: string): NormalizedTitle {
   const poster = stringValue(item.poster_url) || stringValue(item.posterUrl) || stringValue(item.image_url) || nestedImageUrl(item);
   const runtimeIsEstimate = booleanValue(item.total_runtime_is_estimate) || booleanValue(item.totalRuntimeIsEstimate) || booleanValue(item.runtime_is_estimate);
@@ -432,6 +451,7 @@ function normalizeTvdbTitle(item: Record<string, unknown>, canonicalImdbId: stri
     release_year: yearValue(item.release_year) || yearValue(item.releaseYear) || yearValue(item.year),
     title_type: "tvdb-fallback",
     series_status: stringValue(item.series_status) || stringValue(item.seriesStatus) || stringValue(item.status) || null,
+    total_season_count: integerValue(item.total_season_count) || integerValue(item.totalSeasonCount) || integerValue(item.season_count) || integerValue(item.seasonCount),
     total_episode_count: integerValue(item.total_episode_count) || integerValue(item.totalEpisodeCount) || integerValue(item.episode_count) || integerValue(item.episodeCount),
     total_runtime_minutes: runtimeIsEstimate ? null : integerValue(item.total_runtime_minutes) || integerValue(item.totalRuntimeMinutes) || integerValue(item.runtime_minutes_total) || null,
     poster_source_url: poster || null,
@@ -454,6 +474,7 @@ function provenance(primary: NormalizedTitle, tvdb: NormalizedTitle | null) {
     canonical: "imdb",
     title: "primary",
     series_status: primary.series_status ? "primary" : tvdb?.series_status ? "tvdb" : null,
+    total_season_count: primary.total_season_count != null ? "primary" : tvdb?.total_season_count != null ? "tvdb" : null,
     total_episode_count: primary.total_episode_count != null ? "primary" : tvdb?.total_episode_count != null ? "tvdb" : null,
     total_runtime_minutes: primary.total_runtime_minutes != null ? "primary" : tvdb?.total_runtime_minutes != null ? "tvdb" : null,
     poster_source_url: primary.poster_source_url ? "primary" : tvdb?.poster_source_url ? "tvdb" : null
