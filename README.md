@@ -149,7 +149,7 @@ The browser calls `supabase/functions/imdb` for search, lookup, and enrolment. E
 Required or supported secrets:
 
 ```bash
-supabase secrets set ALLOWED_ORIGINS="https://your-org.github.io,http://localhost:8000"
+supabase secrets set ALLOWED_ORIGINS="https://n-plus-plus.github.io,http://localhost:8000,http://127.0.0.1:8000"
 supabase secrets set IMDB_TIMEOUT_MS="8000"
 supabase secrets set TVDB_IMDB_URL_TEMPLATE="https://tvdb-provider.example/by-imdb/{imdbId}"
 supabase secrets set TVDB_API_KEY="..."
@@ -201,13 +201,14 @@ Administrator/database helpers are not granted to `anon`:
 
 ## Current Remote Deployment Status
 
-The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260715000700` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb` and `metadata-refresh` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. Weekly metadata refresh is scheduled as cron job `fff-weekly-metadata-refresh` at `17 3 * * 1` using `METADATA_REFRESH_SECRET`.
+The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260715000700` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb` and `metadata-refresh` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` is configured for `https://n-plus-plus.github.io`, `http://localhost:8000`, and `http://127.0.0.1:8000`. Weekly metadata refresh is not currently scheduled.
 
 Remaining manual deployment work:
 
 - TVmaze primary provider is configured in code and requires no API key or URL-template secrets.
 - Optional TVDB provider secrets/templates are not configured.
-- Known users and secret user links have not been created in the remote database.
+- The first launch users have been created in the remote database. Share secret user links out-of-band; do not record raw tokens in source or documentation.
+- The weekly metadata-refresh cron schedule has not been configured.
 
 ## Verification
 
@@ -229,4 +230,4 @@ deno check supabase/functions/imdb/index.ts
 deno check supabase/functions/metadata-refresh/index.ts
 ```
 
-Current local-only validation cannot prove that migrations, Edge Functions, secrets, Storage policies, Realtime publication changes, or scheduled jobs are deployed remotely.
+Remote deployment can be verified with `npx.cmd supabase migration list`, `npx.cmd supabase functions list`, focused `supabase db query --linked` checks for Storage/Realtime/cron, and live Edge Function smoke calls.
