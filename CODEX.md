@@ -34,9 +34,10 @@ The project is now an initial static web app scaffold.
 | Persistence or database | Supabase Postgres via RLS-protected tables and narrow RPC functions; opt-in localStorage demo with `?demo=1` |
 | External services | Supabase; TVmaze primary television metadata through Supabase Edge Functions; optional TVDB fallback enrichment; Supabase Storage for retained posters |
 | Deployment target | GitHub Pages |
-| Source-control policy | Git commands do not currently recognise this directory as a valid worktree; do not initialise or repair source control unless explicitly requested |
+| Source-control policy | Git worktree on `main` with `origin` at `https://github.com/N-Plus-Plus/FFF.git`; preserve unrelated user changes and do not push, commit, or rewrite history unless explicitly requested |
 | Test framework | None established |
 | Build, run, and verification commands | See project commands |
+| Supabase operations | Codex may operate the linked Supabase project when the user explicitly requests backend control; use dry runs or read-only inspection first when practical, avoid destructive resets, and report live changes clearly |
 
 ## 3. Start-of-pass procedure
 
@@ -340,6 +341,7 @@ Current decisions:
 - The app is static and must run on GitHub Pages without a custom application server.
 - `index.html` deliberately appends a per-page-load cache-busting query string to local CSS and module assets so refreshes do not reuse stale UI files.
 - Supabase is the persistence backend. Browser code calls narrow RPC functions with a user link token and receives no direct table grants.
+- The user expects Codex to control the linked Supabase project for requested backend work. Apply migrations, deploy Edge Functions, inspect remote state, and run bounded verification when needed, but do not run destructive linked resets or bulk data changes unless the user explicitly asks for that specific operation.
 - The catalogue is global and shared; `shows` is the canonical IMDb-deduplicated record, and nominations are a separate per-user concept. Multiple users may nominate the same show, but a user may have only one active nomination for a show.
 - Known users are manually administered outside the ordinary app UI.
 - Unique links use `?u=<link_token>` and the token is treated as a bearer credential. Store only token hashes in the database and never expose hashes to the browser.

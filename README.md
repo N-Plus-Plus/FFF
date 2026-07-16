@@ -205,7 +205,7 @@ Administrator/database helpers are not granted to `anon`:
 
 ## Current Remote Deployment Status
 
-The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260715000700` have been applied to the remote project; `20260715000800_tvmaze_background_images.sql` is pending deployment. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb` and `metadata-refresh` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` must include the GitHub Pages origin plus any LAN origins used for local live testing; loopback localhost origins are allowed in code. Weekly metadata refresh is not currently scheduled.
+The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260716000200` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb` and `metadata-refresh` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` must include the GitHub Pages origin plus any LAN origins used for local live testing; loopback localhost origins are allowed in code. Weekly metadata refresh is not currently scheduled.
 
 Remaining manual deployment work:
 

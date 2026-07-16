@@ -1,5 +1,6 @@
 alter table public.shows
-  add column if not exists background_url text;
+  add column if not exists background_url text,
+  add column if not exists total_season_count integer check (total_season_count is null or total_season_count >= 0);
 
 update public.shows
 set background_url = nullif(btrim(coalesce(

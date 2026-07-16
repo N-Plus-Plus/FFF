@@ -105,6 +105,8 @@ as $$
   )
 $$;
 
+drop function if exists public.admin_list_metadata_refresh_candidates(integer);
+
 create or replace function public.admin_list_metadata_refresh_candidates(p_limit integer default 10)
 returns table (
   id uuid,
