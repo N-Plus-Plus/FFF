@@ -971,7 +971,11 @@ function showStatusText(show) {
 }
 
 function formatShowSubtitle(show) {
-  return show.releaseYear || show.totalEpisodeCount || show.totalRuntimeMinutes ? "" : "IMDb title";
+  return metadataNumber(show, ["releaseYear", "release_year"])
+    || metadataNumber(show, ["totalEpisodeCount", "total_episode_count", "episodeCount", "episode_count", "tvmaze_episode_count"])
+    || metadataNumber(show, ["totalRuntimeMinutes", "total_runtime_minutes"])
+    ? ""
+    : "IMDb title";
 }
 
 function titleMarkup(show) {
@@ -992,14 +996,16 @@ function titleMarkup(show) {
 function metadataMarkup(show) {
   const rows = [];
   const yearRange = formatYearRange(show);
+  const episodeCount = metadataNumber(show, ["totalEpisodeCount", "total_episode_count", "episodeCount", "episode_count", "tvmaze_episode_count"]);
+  const runtimeMinutes = metadataNumber(show, ["totalRuntimeMinutes", "total_runtime_minutes"]);
   if (yearRange) {
     rows.push(yearRange);
   }
-  if (show.totalEpisodeCount) {
-    rows.push(formatEpisodeCount(show));
+  if (episodeCount) {
+    rows.push(formatEpisodeCount(show, episodeCount));
   }
-  if (show.totalRuntimeMinutes) {
-    rows.push(`Total Runtime: ${formatRuntime(show.totalRuntimeMinutes)}`);
+  if (runtimeMinutes) {
+    rows.push(`Total Runtime: ${formatRuntime(runtimeMinutes)}`);
   }
   if (!rows.length) {
     rows.push(formatShowSubtitle(show));
@@ -1008,26 +1014,65 @@ function metadataMarkup(show) {
 }
 
 function formatYearRange(show) {
-  const startYear = Number(show.releaseYear);
+  const startYear = metadataNumber(show, ["releaseYear", "release_year"]);
   if (!Number.isFinite(startYear) || startYear <= 0) {
     return "";
   }
-  const status = String(show.seriesStatus || "").trim().toLowerCase();
-  const endYear = Number(show.endYear ?? show.endedYear ?? show.finalYear ?? show.metadata?.end_year ?? show.metadata?.endYear ?? show.metadata?.tvmaze_end_year);
-  if (status === "ended" && Number.isFinite(endYear) && endYear > 0 && endYear !== startYear) {
+  const status = metadataText(show, ["seriesStatus", "series_status", "status"]).toLowerCase();
+  const endYear = metadataNumber(show, ["endYear", "end_year", "endedYear", "ended_year", "finalYear", "final_year", "ended", "tvmaze_end_year"]);
+  if ((status.includes("ended") || endYear) && Number.isFinite(endYear) && endYear > 0 && endYear !== startYear) {
     return `${startYear}-${endYear}`;
   }
   return String(startYear);
 }
 
-function formatEpisodeCount(show) {
-  const episodeCount = Number(show.totalEpisodeCount);
-  const seasonCount = Number(show.totalSeasonCount ?? show.metadata?.totalSeasonCount ?? show.metadata?.total_season_count ?? show.metadata?.tvmaze_season_count);
+function formatEpisodeCount(show, knownEpisodeCount = null) {
+  const episodeCount = knownEpisodeCount || metadataNumber(show, ["totalEpisodeCount", "total_episode_count", "episodeCount", "episode_count", "tvmaze_episode_count"]);
+  const seasonCount = metadataNumber(show, ["totalSeasonCount", "total_season_count", "seasonCount", "season_count", "tvmaze_season_count"]);
   const episodeText = `${episodeCount} episode${episodeCount === 1 ? "" : "s"}`;
   if (!Number.isFinite(seasonCount) || seasonCount <= 0) {
     return episodeText;
   }
   return `${seasonCount} season${seasonCount === 1 ? "" : "s"}, ${episodeText}`;
+}
+
+function metadataNumber(show, keys) {
+  for (const value of metadataValues(show, keys)) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number > 0) {
+      return number;
+    }
+  }
+  return null;
+}
+
+function metadataText(show, keys) {
+  for (const value of metadataValues(show, keys)) {
+    if (value !== null && value !== undefined && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+  return "";
+}
+
+function metadataValues(show, keys) {
+  const metadata = show?.metadata && typeof show.metadata === "object" ? show.metadata : {};
+  const nestedMetadata = [
+    metadata,
+    metadata.last_refresh,
+    metadata.lastRefresh,
+    metadata.upstream,
+    metadata.primary,
+    metadata.tvdb,
+    metadata.retained
+  ].filter((item) => item && typeof item === "object");
+
+  const values = [];
+  keys.forEach((key) => {
+    values.push(show?.[key]);
+    nestedMetadata.forEach((source) => values.push(source[key]));
+  });
+  return values;
 }
 
 function formatRuntime(minutes) {

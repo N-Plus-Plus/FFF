@@ -304,7 +304,7 @@ function verifyTextContracts() {
   assert.match(rootFiles.css, /touch-action: pan-y;/, "show cards allow normal vertical swipe scrolling before drag starts");
   assert.match(rootFiles.app, /formatYearRange/, "cards render started-ended year ranges");
   assert.match(rootFiles.app, /Total Runtime:/, "cards label cumulative runtime as Total Runtime");
-  assert.match(rootFiles.app, /formatEpisodeCount\(show\)/, "cards render season count before episode count");
+  assert.match(rootFiles.app, /seasonCount[\s\S]*episodeText[\s\S]*return `\$\{seasonCount\} season/, "cards render season count before episode count");
   assert.match(rootFiles.app, /queueBackgroundAudit/, "app audits rendered card backgrounds on load");
   assert.match(rootFiles.providers, /verify-backgrounds/, "metadata edge adapter can request stale background repair");
   assert.match(rootFiles.app, /show\.cardArtUrl[\s\S]*show\.posterUrl/, "card backgrounds prefer stored card art and retain poster fallback");
