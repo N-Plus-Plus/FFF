@@ -160,6 +160,11 @@ supabase secrets set TVDB_API_KEY="..."
 supabase secrets set TVDB_API_KEY_HEADER="Authorization"
 supabase secrets set TVDB_TIMEOUT_MS="8000"
 supabase secrets set METADATA_REFRESH_SECRET="..."
+supabase secrets set ORDER_REMINDER_SECRET="..."
+supabase secrets set ORDER_REMINDER_RECIPIENTS_JSON='[{"name":"Troy","email":"...","link":"https://..."},{"name":"Shane","email":"...","link":"https://..."},{"name":"Aislinn","email":"...","link":"https://..."},{"name":"Jess","email":"...","link":"https://..."}]'
+supabase secrets set ORDER_REMINDER_RECIPIENTS_B64="BASE64_ENCODED_JSON_RECIPIENT_ARRAY"
+supabase secrets set RESEND_API_KEY="..."
+supabase secrets set ORDER_REMINDER_FROM="FFF <notifications@example.com>"
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY="..."
 ```
 
@@ -176,6 +181,18 @@ The repository includes a schedule-ready weekly metadata refresh workflow:
 The refresh function is trusted-schedule-only, rejects ordinary browser invocation, accepts either service-role authorization or `METADATA_REFRESH_SECRET`, processes active canonical shows that are not administratively removed, refreshes records whose last successful metadata refresh is at least seven days old, uses TVmaze first, invokes TVDB only as strict fallback enrichment with an explicit matching IMDb cross-reference, retains existing values when upstream temporarily fails, updates metadata atomically per show, refreshes posters only when needed, limits concurrency by processing sequentially with a bounded batch size, uses bounded timeouts, and logs only sanitized summary counts.
 
 After Supabase is linked and secrets are configured, apply scheduling deliberately. Replace placeholders in `supabase/schedules/metadata-refresh-weekly.sql`; do not commit real schedule secrets or service-role keys.
+
+## Weekly Order Reminders
+
+The repository includes a schedule-ready weekly ordering reminder workflow:
+
+- Edge Function: `supabase/functions/weekly-order-reminders`
+- Migration helper: `admin_list_order_reminder_recipients`
+- Schedule template: `supabase/schedules/weekly-order-reminders.sql`
+
+The reminder function is trusted-schedule-only, rejects ordinary browser invocation, accepts either service-role authorization or `ORDER_REMINDER_SECRET`, reads recipient names, email addresses, and personal bearer links from `ORDER_REMINDER_RECIPIENTS_B64` or the `ORDER_REMINDER_RECIPIENTS_JSON` Supabase secret, and sends through Resend using `RESEND_API_KEY` and `ORDER_REMINDER_FROM`. It queries active users and skips any user who has ranked every active, non-removed show that has at least one active nomination. The template deliberately sends no email when there is nothing for that user to order.
+
+The schedule template runs at `02:00 UTC` every Wednesday, which is `12:00 AEST`. During Sydney daylight saving time, this fixed AEST schedule fires at `13:00 AEDT`.
 
 ## RPC Contract
 
@@ -202,10 +219,11 @@ Administrator/database helpers are not granted to `anon`:
 - `admin_record_show_poster_result(uuid, text, text, text)`
 - `admin_list_metadata_refresh_candidates(integer)`
 - `admin_update_show_metadata(uuid, jsonb)`
+- `admin_list_order_reminder_recipients()`
 
 ## Current Remote Deployment Status
 
-The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260716000200` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb` and `metadata-refresh` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` must include the GitHub Pages origin plus any LAN origins used for local live testing; loopback localhost origins are allowed in code. Weekly metadata refresh is not currently scheduled.
+The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260718000100` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb`, `metadata-refresh`, and `weekly-order-reminders` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` must include the GitHub Pages origin plus any LAN origins used for local live testing; loopback localhost origins are allowed in code. Weekly metadata refresh is not currently scheduled. Weekly order reminders are scheduled for Wednesday 12:00 AEST, but require Resend email secrets before they can send.
 
 Remaining manual deployment work:
 
@@ -213,6 +231,7 @@ Remaining manual deployment work:
 - Optional TVDB provider secrets/templates are not configured.
 - The first launch users have been created in the remote database. Share secret user links out-of-band; do not record raw tokens in source or documentation.
 - The weekly metadata-refresh cron schedule has not been configured.
+- Resend email secrets have not been configured for weekly order reminders.
 
 ## Verification
 
@@ -232,6 +251,7 @@ Edge Function syntax can be checked when Deno is installed:
 ```bash
 deno check supabase/functions/imdb/index.ts
 deno check supabase/functions/metadata-refresh/index.ts
+deno check supabase/functions/weekly-order-reminders/index.ts
 ```
 
 Remote deployment can be verified with `npx.cmd supabase migration list`, `npx.cmd supabase functions list`, focused `supabase db query --linked` checks for Storage/Realtime/cron, and live Edge Function smoke calls.

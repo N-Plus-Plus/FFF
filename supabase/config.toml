@@ -34,3 +34,6 @@ verify_jwt = false
 
 [functions.metadata-refresh]
 verify_jwt = false
+
+[functions.weekly-order-reminders]
+verify_jwt = false

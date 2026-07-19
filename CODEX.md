@@ -32,7 +32,7 @@ The project is now an initial static web app scaffold.
 | Frameworks and major libraries | Supabase JS browser client loaded from CDN |
 | Package manager | None established |
 | Persistence or database | Supabase Postgres via RLS-protected tables and narrow RPC functions; opt-in localStorage demo with `?demo=1` |
-| External services | Supabase; TVmaze primary television metadata through Supabase Edge Functions; optional TVDB fallback enrichment; Supabase Storage for retained posters |
+| External services | Supabase; TVmaze primary television metadata through Supabase Edge Functions; optional TVDB fallback enrichment; Resend for weekly ordering reminder email delivery; Supabase Storage for retained posters |
 | Deployment target | GitHub Pages |
 | Source-control policy | Git worktree on `main` with `origin` at `https://github.com/N-Plus-Plus/FFF.git`; preserve unrelated user changes and do not push, commit, or rewrite history unless explicitly requested |
 | Test framework | None established |
@@ -74,7 +74,7 @@ Maintain this section as the project develops. It should help a future agent fin
 | User interface | `style.css`, DOM rendering in `app.js` |
 | Domain or business rules | Board aggregate strategy and IMDb tie-breaking in `ranking.js`; ranking sequence orchestration in `app.js` |
 | Persistence and data access | Supabase/local data store helpers in `store.js`; schema/RPC in `supabase/migrations/` |
-| API or service boundaries | TVmaze primary provider boundary and TVDB fallback merge helpers in `providers.js`; canonical IMDb Edge Function in `supabase/functions/imdb`; weekly refresh Edge Function in `supabase/functions/metadata-refresh`; Supabase RPC functions in migrations |
+| API or service boundaries | TVmaze primary provider boundary and TVDB fallback merge helpers in `providers.js`; canonical IMDb Edge Function in `supabase/functions/imdb`; weekly refresh Edge Function in `supabase/functions/metadata-refresh`; weekly ordering reminder Edge Function in `supabase/functions/weekly-order-reminders`; Supabase RPC functions in migrations |
 | Configuration | `config.js` |
 | Shared utilities | Small ES modules in `store.js`, `providers.js`, and `ranking.js` |
 | Tests | Not established |
@@ -359,6 +359,7 @@ Current decisions:
 - Board refresh uses Supabase Realtime invalidation through a non-sensitive public revision row, then calls token-authenticated Board RPCs. Retain bounded polling only as a fallback.
 - Enrolled posters and selected card artwork are retained in the `show-posters` Supabase Storage bucket via trusted server-side code. Card artwork is stored separately from posters under deterministic `card-art/` paths and records whether the source was background, banner, poster, or placeholder. Browser code may read public image assets but must not receive arbitrary upload permission.
 - Weekly metadata refresh is implemented as a trusted Edge Function and schedule template. It accepts service-role authorization or the dedicated `METADATA_REFRESH_SECRET`, processes active, non-removed shows whose last successful refresh is at least seven days old, refreshes through TVmaze first, preserves known values on provider failures, and uses TVDB only under the strict cross-reference fallback rule. The Edge Function is deployed to the linked FFF project, but the weekly cron schedule is not currently configured.
+- Weekly order reminders are implemented as a trusted Edge Function, service-role RPC helper, and schedule template. The function accepts service-role authorization or `ORDER_REMINDER_SECRET`, reads recipient names, email addresses, and personal bearer links only from Supabase secrets, preferring `ORDER_REMINDER_RECIPIENTS_B64` over `ORDER_REMINDER_RECIPIENTS_JSON`, sends through Resend, and skips active users who have no active unranked shows. The fixed schedule target is Wednesday 12:00 AEST, represented as `02:00 UTC`.
 - All app tables must have RLS enabled. `anon` must not receive direct read/write grants. Privileged functions must use safe `search_path` settings and validate link tokens internally.
 
 Add only decisions that materially guide future work. Examples include:
