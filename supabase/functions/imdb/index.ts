@@ -31,6 +31,7 @@ type NormalizedTitle = {
   total_season_count: number | null;
   total_episode_count: number | null;
   total_runtime_minutes: number | null;
+  tvmaze_rating?: number | null;
   poster_url: string | null;
   poster_source_url: string | null;
   background_url: string | null;
@@ -294,6 +295,7 @@ function providerMetadata(title: NormalizedTitle) {
     total_season_count: title.total_season_count,
     total_episode_count: title.total_episode_count,
     total_runtime_minutes: title.total_runtime_minutes,
+    tvmaze_rating: title.tvmaze_rating,
     metadata_provider: title.metadata_provider,
     provider_record_id: title.provider_record_id,
     tvdb_record_id: title.tvdb_record_id || null,
@@ -641,6 +643,7 @@ function normalizeTvmazeShow(
   const episodeCount = episodes ? episodes.length : null;
   const seasonCount = episodes ? totalSeasonCount(episodes) : null;
   const totalRuntime = episodes ? cumulativeExplicitRuntime(episodes) : null;
+  const tvmazeRating = ratingValue(isRecord(show.rating) ? show.rating.average : null);
   const image = isRecord(show.image) ? show.image : {};
   const poster = stringValue(image.original) || stringValue(image.medium);
   const cardArt = selectTvmazeCardArt(show, images);
@@ -656,6 +659,7 @@ function normalizeTvmazeShow(
     total_season_count: seasonCount,
     total_episode_count: episodeCount,
     total_runtime_minutes: totalRuntime,
+    tvmaze_rating: tvmazeRating,
     poster_url: poster || null,
     poster_source_url: poster || null,
     background_url: isHorizontalArt ? cardArt.sourceUrl : null,
@@ -676,6 +680,7 @@ function normalizeTvmazeShow(
       tvmaze_season_count: seasonCount,
       tvmaze_episode_count: episodeCount,
       tvmaze_runtime_complete: totalRuntime !== null,
+      tvmaze_rating: tvmazeRating,
       tvmaze_card_art_url: cardArt.sourceUrl,
       tvmaze_card_art_type: cardArt.type,
       tvmaze_card_art_width: cardArt.width,
@@ -892,6 +897,11 @@ function integerValue(value: unknown) {
     return match ? Number(match[0]) : null;
   }
   return null;
+}
+
+function ratingValue(value: unknown): number | null {
+  const rating = Number(value);
+  return Number.isFinite(rating) && rating >= 0 && rating <= 10 ? rating : null;
 }
 
 function booleanValue(value: unknown) {

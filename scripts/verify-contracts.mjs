@@ -63,7 +63,8 @@ const rootFiles = {
   cardMigration: await readFile(new URL("../supabase/migrations/20260716000100_card_metadata_background_audit.sql", import.meta.url), "utf8"),
   artMigration: await readFile(new URL("../supabase/migrations/20260716000200_tvmaze_card_art_storage.sql", import.meta.url), "utf8"),
   edge: await readFile(new URL("../supabase/functions/imdb/index.ts", import.meta.url), "utf8"),
-  refreshEdge: await readFile(new URL("../supabase/functions/metadata-refresh/index.ts", import.meta.url), "utf8")
+  refreshEdge: await readFile(new URL("../supabase/functions/metadata-refresh/index.ts", import.meta.url), "utf8"),
+  reminderEdge: await readFile(new URL("../supabase/functions/weekly-order-reminders/index.ts", import.meta.url), "utf8")
 };
 
 verifyRanking();
@@ -363,6 +364,8 @@ function verifyTextContracts() {
   assert.match(rootFiles.refreshEdge, /metadata_refresh_failure_category/, "provider failure category is sanitized and retained");
   assert.match(rootFiles.refreshEdge, /copyPosterToStorage/, "refresh function can update posters through trusted code");
   assert.doesNotMatch(rootFiles.refreshEdge, /console\.log\(.*token/i, "refresh logging does not include raw tokens");
+  assert.match(rootFiles.reminderEdge, /requestedRecipientNames/, "weekly reminder function supports trusted single-recipient tests");
+  assert.match(rootFiles.reminderEdge, /recipient_names/, "weekly reminder manual tests filter by requested recipient names");
 
   assert.match(rootFiles.providers, /REJECTED_TITLE_TYPES/, "browser provider normalization rejects unsupported one-off titles");
   assert.match(rootFiles.store, /computeProvisionalBoard/, "demo Board uses shared ranking semantics");

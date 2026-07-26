@@ -491,6 +491,7 @@ function rankedCard(show, index) {
       ${titleMarkup(show)}
       ${metadataMarkup(show)}
     </div>
+    ${ratingStarsMarkup(show)}
     <div class="rank-controls" aria-label="Move ${escapeAttribute(show.title)}">
       <button class="icon-button" type="button" data-move="up" aria-label="Move up"><i data-lucide="arrow-up" aria-hidden="true"></i></button>
       <button class="icon-button" type="button" data-move="down" aria-label="Move down"><i data-lucide="arrow-down" aria-hidden="true"></i></button>
@@ -521,6 +522,7 @@ function unrankedCard(show) {
       ${titleMarkup(show)}
       ${metadataMarkup(show)}
     </div>
+    ${ratingStarsMarkup(show)}
     <div class="rank-controls">
       <button class="icon-button" type="button" data-rank aria-label="Add to ranking"><i data-lucide="plus" aria-hidden="true"></i></button>
     </div>
@@ -994,23 +996,40 @@ function titleMarkup(show) {
 }
 
 function metadataMarkup(show) {
-  const rows = [];
   const yearRange = formatYearRange(show);
   const episodeCount = metadataNumber(show, ["totalEpisodeCount", "total_episode_count", "episodeCount", "episode_count", "tvmaze_episode_count"]);
   const runtimeMinutes = metadataNumber(show, ["totalRuntimeMinutes", "total_runtime_minutes"]);
-  if (yearRange) {
-    rows.push(yearRange);
+  const rows = [
+    yearRange,
+    episodeCount ? formatEpisodeCount(show, episodeCount) : "",
+    runtimeMinutes ? `Total Runtime: ${formatRuntime(runtimeMinutes)}` : ""
+  ];
+  return rows.map((row) => `<p class="show-subtitle${row ? "" : " show-subtitle--placeholder"}">${row ? escapeHtml(row) : "&nbsp;"}</p>`).join("");
+}
+
+function ratingStarsMarkup(show) {
+  const rating = Number(show.tvmazeRating ?? show.tvmaze_rating);
+  if (!Number.isFinite(rating) || rating < 0 || rating > 10) {
+    return "";
   }
-  if (episodeCount) {
-    rows.push(formatEpisodeCount(show, episodeCount));
-  }
-  if (runtimeMinutes) {
-    rows.push(`Total Runtime: ${formatRuntime(runtimeMinutes)}`);
-  }
-  if (!rows.length) {
-    rows.push(formatShowSubtitle(show));
-  }
-  return rows.map((row) => `<p class="show-subtitle">${escapeHtml(row)}</p>`).join("");
+
+  const halfStarCount = Math.round(rating);
+  const stars = Array.from({ length: 5 }, (_, index) => {
+    const fill = Math.max(0, Math.min(2, halfStarCount - (index * 2)));
+    return ratingStarSvg(fill, `${show.id || "show"}-${index}`);
+  }).join("");
+  const displayRating = rating.toFixed(1).replace(/\.0$/, "");
+  return `<div class="rating-stars" role="img" aria-label="TVmaze rating ${escapeAttribute(displayRating)} out of 10">${stars}</div>`;
+}
+
+function ratingStarSvg(fill, index) {
+  const path = "M256 38.013c-22.458 0-66.472 110.3-84.64 123.502-18.17 13.2-136.674 20.975-143.614 42.334-6.94 21.358 84.362 97.303 91.302 118.662 6.94 21.36-22.286 136.465-4.116 149.665 18.17 13.2 118.61-50.164 141.068-50.164 22.458 0 122.9 63.365 141.068 50.164 18.17-13.2-11.056-128.306-4.116-149.665 6.94-21.36 98.242-97.304 91.302-118.663-6.94-21.36-125.444-29.134-143.613-42.335-18.168-13.2-62.182-123.502-84.64-123.502z";
+  const fillMarkup = fill === 2
+    ? `<path class="rating-star__fill" d="${path}" />`
+    : fill === 1
+      ? `<path class="rating-star__fill" d="${path}" clip-path="url(#rating-star-half-${index})" />`
+      : "";
+  return `<svg class="rating-star" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><defs><clipPath id="rating-star-half-${index}"><rect width="256" height="512" /></clipPath></defs>${fillMarkup}<path class="rating-star__outline" d="${path}" /></svg>`;
 }
 
 function formatYearRange(show) {

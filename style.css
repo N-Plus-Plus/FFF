@@ -35,6 +35,7 @@
   --emerald-dark: #3bb85d;
   --sapphire: #4ec2e7;
   --sapphire-dark: #3bb1d9;
+  --straw: #e6ca77;
   --indigo: #9398ec;
   --indigo-dark: #7277d5;
   --paper: #f1f2f4;
@@ -578,6 +579,10 @@ h2 {
   font-size: 0.82rem;
 }
 
+.show-subtitle--placeholder {
+  visibility: hidden;
+}
+
 .rank-number,
 .leader-position {
   display: grid;
@@ -836,7 +841,7 @@ h2 {
     grid-template-columns: 2.1rem minmax(0, 1fr);
   }
 
-  .show-card .rank-controls {
+.show-card .rank-controls {
     grid-column: 1 / -1;
     width: 100%;
   }
@@ -867,6 +872,38 @@ h2 {
     grid-column: 1 / -1;
     justify-items: stretch;
   }
+}
+
+.rating-stars {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.65rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  width: 6.7rem;
+  justify-content: space-between;
+  gap: 0;
+  pointer-events: none;
+}
+
+.rating-star {
+  width: 1.12rem;
+  height: auto;
+  overflow: hidden;
+}
+
+.rating-star__fill {
+  fill: var(--straw);
+}
+
+.rating-star__outline {
+  fill: none;
+  stroke: var(--straw);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
 @media (prefers-reduced-motion: reduce) {

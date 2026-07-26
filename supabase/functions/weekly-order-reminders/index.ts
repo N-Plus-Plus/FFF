@@ -33,6 +33,7 @@ async function handleRequest(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const dryRun = body?.dry_run === true;
+  const targetRecipientNames = requestedRecipientNames(body);
   const recipients = configuredRecipients();
   const recipientsByName = new Map(recipients.map((recipient) => [normalizeName(recipient.name), recipient]));
   const supabase = serviceClient();
@@ -47,6 +48,7 @@ async function handleRequest(request: Request) {
       candidate,
       recipient: recipientsByName.get(normalizeName(candidate.display_name))
     }))
+    .filter((entry) => targetRecipientNames.length === 0 || targetRecipientNames.includes(normalizeName(entry.candidate.display_name)))
     .filter((entry) => entry.candidate.unranked_show_count > 0);
 
   const missingConfigCount = candidates.filter((entry) => !entry.recipient).length;
@@ -57,7 +59,8 @@ async function handleRequest(request: Request) {
       ok: true,
       dry_run: true,
       would_send: sendable.length,
-      skipped_missing_recipient_config: missingConfigCount
+      skipped_missing_recipient_config: missingConfigCount,
+      target_recipient_names: targetRecipientNames
     }, 200);
   }
 
@@ -86,15 +89,26 @@ async function handleRequest(request: Request) {
     candidates: candidates.length,
     sent,
     failed,
-    skipped_missing_recipient_config: missingConfigCount
+    skipped_missing_recipient_config: missingConfigCount,
+    target_recipient_names: targetRecipientNames
   });
 
   return json({
     ok: failed === 0,
     sent,
     failed,
-    skipped_missing_recipient_config: missingConfigCount
+    skipped_missing_recipient_config: missingConfigCount,
+    target_recipient_names: targetRecipientNames
   }, failed === 0 ? 200 : 502);
+}
+
+function requestedRecipientNames(body: unknown) {
+  if (!isRecord(body) || !Array.isArray(body.recipient_names)) {
+    return [];
+  }
+  return Array.from(new Set(body.recipient_names
+    .map((name) => typeof name === "string" ? normalizeName(name) : "")
+    .filter(Boolean)));
 }
 
 function configuredRecipients() {
