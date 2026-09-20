@@ -29,10 +29,10 @@ The project is now an initial static web app scaffold.
 | Project maturity | Static scaffold with Supabase architecture established |
 | Application shape | Static GitHub Pages app with raw HTML, CSS, and JavaScript ES modules |
 | Languages and runtime | Browser JavaScript, HTML, CSS; no build step |
-| Frameworks and major libraries | Supabase JS browser client loaded from CDN |
+| Frameworks and major libraries | Raw browser JavaScript; no runtime third-party data client |
 | Package manager | None established |
-| Persistence or database | Supabase Postgres via RLS-protected tables and narrow RPC functions; opt-in localStorage demo with `?demo=1` |
-| External services | Supabase; TVmaze primary television metadata through Supabase Edge Functions; optional TVDB fallback enrichment; Resend for weekly ordering reminder email delivery; Supabase Storage for retained posters |
+| Persistence or database | Cloudflare D1 (`fff`, Oceania) is the frontend target through Worker `fff-api`; Supabase Postgres remains intact as rollback and historical source. Opt-in localStorage demo with `?demo=1` |
+| External services | Cloudflare Workers, D1, R2, and Cron Trigger; TVmaze primary television metadata; Supabase remains rollback/historical infrastructure |
 | Deployment target | GitHub Pages |
 | Source-control policy | Git worktree on `main` with `origin` at `https://github.com/N-Plus-Plus/FFF.git`; preserve unrelated user changes and do not push, commit, or rewrite history unless explicitly requested |
 | Test framework | None established |
@@ -75,6 +75,7 @@ Maintain this section as the project develops. It should help a future agent fin
 | Domain or business rules | Board aggregate strategy and IMDb tie-breaking in `ranking.js`; ranking sequence orchestration in `app.js` |
 | Persistence and data access | Supabase/local data store helpers in `store.js`; schema/RPC in `supabase/migrations/` |
 | API or service boundaries | TVmaze primary provider boundary and TVDB fallback merge helpers in `providers.js`; canonical IMDb Edge Function in `supabase/functions/imdb`; weekly refresh Edge Function in `supabase/functions/metadata-refresh`; weekly ordering reminder Edge Function in `supabase/functions/weekly-order-reminders`; Supabase RPC functions in migrations |
+| Cloudflare migration | `wrangler.jsonc`, D1 schema in `cloudflare/migrations/`, Worker API in `cloudflare/src/index.js`, and private-export conversion helper in `cloudflare/scripts/import-d1.mjs` |
 | Configuration | `config.js` |
 | Shared utilities | Small ES modules in `store.js`, `providers.js`, and `ranking.js` |
 | Tests | Not established |
@@ -340,13 +341,16 @@ Current decisions:
 
 - The app is static and must run on GitHub Pages without a custom application server.
 - `index.html` deliberately appends a per-page-load cache-busting query string to local CSS and module assets so refreshes do not reuse stale UI files.
-- Supabase is the persistence backend. Browser code calls narrow RPC functions with a user link token and receives no direct table grants.
+- The frontend uses the Cloudflare Worker `fff-api` through `config.js`; browser code calls narrow token-authenticated HTTP endpoints and receives no direct D1 access. Supabase remains the rollback source and must not be deleted or modified during this migration.
+- The deployed Cloudflare resources are Worker `fff-api`, D1 `fff` in Oceania, and R2 `fff-artwork`. Once live writes reach D1, rollback to Supabase is not lossless without export/reconciliation.
+- Cloudflare import/export must not depend on Docker. Use the authenticated Supabase Management API through `npx.cmd supabase db query --linked` for explicit, read-only FFF table projections; private exports and generated D1 import SQL stay ignored under `cloudflare/private-*`.
+- Cloudflare D1 import serialises PostgreSQL boolean values as SQLite integers (`0`/`1`), never text booleans. Worker link authentication requires `is_active = 1`; token hashes remain imported verbatim as lowercase 64-character SHA-256 hex.
 - The user expects Codex to control the linked Supabase project for requested backend work. Apply migrations, deploy Edge Functions, inspect remote state, and run bounded verification when needed, but do not run destructive linked resets or bulk data changes unless the user explicitly asks for that specific operation.
 - The catalogue is global and shared; `shows` is the canonical IMDb-deduplicated record, and nominations are a separate per-user concept. Multiple users may nominate the same show, but a user may have only one active nomination for a show.
 - Known users are manually administered outside the ordinary app UI.
 - Unique links use `?u=<link_token>` and the token is treated as a bearer credential. Store only token hashes in the database and never expose hashes to the browser.
 - One known user can be marked administrator. Administrators may soft-remove active shows through the app; restoration is deliberately database/service-role only through `admin_restore_show`. Restoration clears the removal marker only, withdraws prior nominations, clears current ranking rows for that show, and leaves the show inactive until a fresh nomination.
-- `config.js` must contain only the Supabase project URL and publishable browser key.
+- `config.js` contains only the public Cloudflare Worker `apiUrl`. The Supabase adapter remains in `store.js` solely as source-controlled rollback compatibility; no Supabase runtime key or URL is published by the production configuration.
 - Migration files in `supabase/migrations/` are the authoritative schema source. Do not restore `supabase-schema.sql` as a competing schema.
 - IMDb title IDs are the canonical provider boundary and are mandatory for enrolled shows. Browser code must use the Supabase Edge Function in `supabase/functions/imdb`, which owns external provider access and allows CORS from configured origins plus loopback local origins on any port. TVmaze is the primary television metadata provider, requires no API key, and is called through fixed public HTTPS endpoints for search, IMDb lookup, episode retrieval, and `shows/{tvmazeId}/images` card-art retrieval after retaining the numeric TVmaze show ID. Do not search ordinary TVmaze show lookup responses for background or banner properties. Card-art selection prefers background original URL, then banner original/medium URL, then the normal poster, then the local placeholder; `main: true` wins within a type. Canonical identity comes from TVmaze `externals.imdb`; reject TVmaze search results without an IMDb ID. Card-art records retain the selected TVmaze artwork type and dimensions so stale persisted image assets can be detected and refreshed.
 - TVmaze cumulative runtime is exact only: sum explicit TVmaze episode `runtime` values, and leave cumulative runtime unknown if any retrieved episode lacks runtime. Do not estimate from average runtime or other derived fields.
@@ -357,9 +361,9 @@ Current decisions:
 - The current Board aggregate strategy is isolated and identified as `sequential-irv-v1`. Each user's explicit ranked queue is a partial ranked-choice ballot; unranked shows are absent. The Board sequence is produced by repeated instant-runoff elections over active, non-removed shows with at least one retained ranking input. Retained rankings from inactive users still influence the election.
 - Board confirmation is dynamic: active users are those with `is_active = true` and no revoked token, and a show is confirmed only when every currently active user has explicitly ranked it. With zero active users, no result is confirmed. The displayed Board ranking count is active users only; inactive-user contribution counts are not browser-facing.
 - Aggregate ties are deterministic and use canonical IMDb numeric value: strip non-digits, compare arbitrary-precision-safe numeric strings, let the higher value win winner ties, and let the lower value lose elimination ties first.
-- Board refresh uses Supabase Realtime invalidation through a non-sensitive public revision row, then calls token-authenticated Board RPCs. Retain bounded polling only as a fallback.
-- Enrolled posters and selected card artwork are retained in the `show-posters` Supabase Storage bucket via trusted server-side code. Card artwork is stored separately from posters under deterministic `card-art/` paths and records whether the source was background, banner, poster, or placeholder. Browser code may read public image assets but must not receive arbitrary upload permission.
-- Weekly metadata refresh is implemented as a trusted Edge Function and schedule template. It accepts service-role authorization or the dedicated `METADATA_REFRESH_SECRET`, processes active, non-removed shows whose last successful refresh is at least seven days old, refreshes through TVmaze first, preserves known values on provider failures, and uses TVDB only under the strict cross-reference fallback rule. The Edge Function is deployed to the linked FFF project, but the weekly cron schedule is not currently configured.
+- Board refresh uses token-authenticated revision polling when the Board is open, on focus/visibility return, and through a one-minute fallback interval; do not introduce Realtime infrastructure.
+- Enrolled posters and selected card artwork are retained in the `fff-artwork` R2 bucket under deterministic `posters/` and `card-art/` paths. Browser reads are served by the Worker; browser uploads are not permitted.
+- Weekly metadata refresh runs from the Worker Cron Trigger at `02:00 UTC` each Wednesday. It processes active, non-removed shows due for refresh through TVmaze, retains known values on provider failures, and records sanitized failure status.
 - Weekly order reminders are implemented as a trusted Edge Function, service-role RPC helper, and schedule template. The function accepts service-role authorization or `ORDER_REMINDER_SECRET`, reads recipient names, email addresses, and personal bearer links only from Supabase secrets, preferring `ORDER_REMINDER_RECIPIENTS_B64` over `ORDER_REMINDER_RECIPIENTS_JSON`, sends through Resend, supports trusted manual single-user tests through a `recipient_names` request array, and skips active users who have no active unranked shows. The fixed schedule target is Wednesday 12:00 AEST, represented as `02:00 UTC`.
 - All app tables must have RLS enabled. `anon` must not receive direct read/write grants. Privileged functions must use safe `search_path` settings and validate link tokens internally.
 

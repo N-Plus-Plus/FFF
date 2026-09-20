@@ -6,3 +6,7 @@ supabase/.temp/
 *.log
 .DS_Store
 Thumbs.db
+.wrangler/
+cloudflare/private-*.json
+cloudflare/private-*.sql
+cloudflare/artwork-tmp/

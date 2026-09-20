@@ -8,11 +8,39 @@ export function createDataStore(config, { demoMode }) {
   if (demoMode) {
     return createLocalDemoStore();
   }
+  if (config.apiUrl) {
+    return createCloudflareStore(config);
+  }
   return createSupabaseStore(config);
 }
 
-export function isSupabaseConfigured(config) {
-  return Boolean(config.supabaseUrl && config.supabaseAnonKey);
+export function isApiConfigured(config) {
+  return Boolean(config.apiUrl || (config.supabaseUrl && config.supabaseAnonKey));
+}
+
+function createCloudflareStore(config) {
+  const request = async (path, token, body = {}) => {
+    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, token }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || `API request failed with ${response.status}.`);
+    return data;
+  };
+  return {
+    async load(token) { return normalizeSnapshot(await request("/v1/load", token), config); },
+    async listCatalogue(token) { const data = await request("/v1/catalogue", token); return { shows: (data.shows || []).map((show) => normalizeShow(show, config)), removedShows: (data.removed_shows || []).map((show) => normalizeShow(show, config)) }; },
+    async nominate(token, show) { return normalizeShow(await request("/v1/nominate", token, { imdbId: show.imdbId }), config); },
+    async withdraw(token, showId) { return normalizeShow(await request("/v1/withdraw", token, { showId }), config); },
+    async removeShow(token, showId) { return normalizeShow(await request("/v1/admin/remove", token, { showId }), config); },
+    async getOrder(token) { const data = await request("/v1/order", token); return { ranked: (data.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.unranked || []).map((show) => normalizeShow(show, config)) }; },
+    async replaceRanking(token, showIds) { const data = await request("/v1/ranking", token, { showIds }); return { revision: data.revision, updatedAt: data.updated_at, ranked: (data.order?.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.order?.unranked || []).map((show) => normalizeShow(show, config)) }; },
+    async getBoard(token) { return normalizeBoard(await request("/v1/board", token), config); },
+    async getBoardRevision(token) { const data = await request("/v1/revision", token); return { revision: Number(data.revision || 0), updatedAt: data.updated_at || "" }; },
+    async subscribeBoardInvalidation() { return () => {}; }
+  };
+}
+
+function normalizeSnapshot(data, config) {
+  return { currentUser: normalizeUser(data.current_user), shows: (data.shows || []).map((show) => normalizeShow(show, config)), removedShows: (data.removed_shows || []).map((show) => normalizeShow(show, config)), ranked: (data.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.unranked || []).map((show) => normalizeShow(show, config)), board: normalizeBoard(data.board, config) };
 }
 
 function createSupabaseStore(config) {
@@ -475,9 +503,13 @@ function clearCurrentRankingsForShow(state, showId) {
 }
 
 function posterPublicUrl(config, path) {
-  if (!config?.supabaseUrl || !path) {
+  if (!path) {
     return "";
   }
+  if (config?.apiUrl) {
+    return `${config.apiUrl.replace(/\/$/, "")}/artwork/${encodeURIComponent(path).replaceAll("%2F", "/")}`;
+  }
+  if (!config?.supabaseUrl) return "";
   return `${config.supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${POSTER_BUCKET}/${encodeURIComponent(path).replaceAll("%2F", "/")}`;
 }
 

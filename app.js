@@ -1,5 +1,5 @@
 import { APP_CONFIG } from "./config.js";
-import { createDataStore, isSupabaseConfigured } from "./store.js";
+import { createDataStore, isApiConfigured } from "./store.js";
 import { createMetadataProvider, normalizeProviderTitle, parseImdbId } from "./providers.js";
 
 const BOARD_FALLBACK_POLL_MS = 60000;
@@ -135,8 +135,8 @@ function guardConfiguration() {
   if (appState.demoMode) {
     return;
   }
-  if (!isSupabaseConfigured(APP_CONFIG)) {
-    throw new Error("Supabase is not configured. Set supabaseUrl and supabaseAnonKey in config.js, or add ?demo=1 for local demo mode.");
+  if (!isApiConfigured(APP_CONFIG)) {
+    throw new Error("FFF API is not configured. Set apiUrl in config.js, or add ?demo=1 for local demo mode.");
   }
   if (!appState.token) {
     throw new Error("Missing user link token. Open the permanent URL containing ?u=<link_token>.");

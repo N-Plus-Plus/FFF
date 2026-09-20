@@ -138,6 +138,16 @@ function createDemoImdbAdapter() {
 }
 
 async function requestImdb(config, token, payload) {
+  if (config.apiUrl) {
+    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/v1/metadata`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, token })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || `TV metadata request failed with ${response.status}.`);
+    return data;
+  }
   if (!config.supabaseUrl || !config.supabaseAnonKey) {
     throw new Error("Supabase is not configured, so TV show search is unavailable.");
   }

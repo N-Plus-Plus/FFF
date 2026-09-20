@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fff-api",
+  "main": "cloudflare/src/index.js",
+  "compatibility_date": "2026-09-19",
+  "workers_dev": true,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "fff",
+    "database_id": "55f0bf10-f695-45b9-b743-2c293fdf7224",
+    "migrations_dir": "cloudflare/migrations"
+  }],
+  "r2_buckets": [{ "binding": "ARTWORK", "bucket_name": "fff-artwork" }],
+  "triggers": { "crons": ["0 2 * * 3"] },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://n-plus-plus.github.io,http://localhost:3000,http://127.0.0.1:3000"
+  }
+}
