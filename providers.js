@@ -149,7 +149,7 @@ async function requestImdb(config, token, payload) {
     return data;
   }
   if (!config.supabaseUrl || !config.supabaseAnonKey) {
-    throw new Error("Supabase is not configured, so TV show search is unavailable.");
+    throw new Error("API is not configured, so TV show search is unavailable.");
   }
 
   const endpoint = `${config.supabaseUrl.replace(/\/$/, "")}/functions/v1/imdb`;
