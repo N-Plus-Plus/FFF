@@ -42,9 +42,9 @@ Run restoration only from an administrator-controlled database or service-role c
 
 ## Ordering and Board
 
-The Order screen has separate Ranked and Unranked sections. Newly nominated active shows appear as Unranked for every user and do not create ranking rows for users who have not expressed an opinion. A user ranks a show only by moving it into Ranked, either with the add control, by tapping an Unranked card to append it, or by tap-holding a card for 0.25 seconds and dragging it into a Ranked insertion slot. Quick swipes before the hold completes remain normal page scrolling, and long-press card context menus are suppressed so slow drag starts are not interrupted. Ranked positions are strict, unique, contiguous, and transactionally replaced through `replace_user_ranking`.
+The Rank screen has separate Ranked and Unranked sections. Newly nominated active shows appear as Unranked for every user and do not create ranking rows for users who have not expressed an opinion. A user ranks a show only by moving it into Ranked, either with the add control, by tapping an Unranked card to append it, or by tap-holding a card for 0.25 seconds and dragging it into a Ranked insertion slot. Quick swipes before the hold completes remain normal page scrolling, and long-press card context menus are suppressed so slow drag starts are not interrupted. Ranked positions are strict, unique, contiguous, and transactionally replaced through `replace_user_ranking`.
 
-The app persistently reminds valid users when they have active unranked shows: the Order tab shows a count and a non-blocking banner remains visible across Add, Order, and Board with a direct Order action. The banner has a dismiss control, and dismissal lasts only for the current browser session through `sessionStorage`. The reminder returns in a new browser session or when session state is cleared.
+The app persistently reminds valid users when they have active unranked shows: the Rank tab shows a count and a non-blocking banner remains visible across Nominate, Rank, and Watch with a direct Order action. The banner has a dismiss control, and dismissal lasts only for the current browser session through `sessionStorage`. The reminder returns in a new browser session or when session state is cleared.
 
 The current aggregate strategy is `sequential-irv-v1`, implemented in `ranking.js` and SQL `calculate_provisional_board`. Each user's ranked queue is a partial ranked-choice ballot. Unranked shows are absent from that user's ballot and never count as a synthetic last-place preference.
 
@@ -52,7 +52,7 @@ The Board candidate set contains active, non-removed shows with at least one ret
 
 The Board sequence is produced by repeated instant-runoff elections. The first election chooses first place from all eligible candidates. That winner is removed, the original ballots are filtered to the remaining candidates, and a fresh instant-runoff election chooses the next position. This repeats until every eligible candidate has a strict position. Exhausted ballots are ignored for the current election.
 
-The ordinary Board displays the aggregate sequence without per-card vote counts. Entries that do not yet have one vote from every active user remain in their aggregate position but render at reduced opacity. It does not display aggregate numeric scores or algorithm explanation.
+The ordinary Board displays the aggregate sequence without aggregate scores or algorithm explanation. A card with fewer than four active-user rankings displays a `Votes: N of 4` badge in its top-right corner; entries that do not yet have one vote from every active user remain in their aggregate position but render at reduced opacity.
 
 Confirmation is dynamic. For every Board calculation:
 

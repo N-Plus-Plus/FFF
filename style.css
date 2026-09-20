@@ -664,6 +664,21 @@ h2 {
   white-space: nowrap;
 }
 
+.leader-vote-badge {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 1;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 0.66);
+  color: var(--text-primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .leader-card.is-unconfirmed {
   opacity: 0.5;
 }

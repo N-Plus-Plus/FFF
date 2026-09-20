@@ -1,6 +1,10 @@
-# CODEX.md: Project Guidance
+# AGENTS.md: Project Guidance
 
 Read this file before every coding, maintenance, review, investigation, or documentation pass in this project.
+
+This project is a Git repository and may be treated as a normal Git worktree for inspection and version-control operations.
+
+`AGENTS.md` is the root entry guide for this project.
 
 This file is the root standing guide for agents working in the repository. It should remain concise, current, and useful as a source of stable project context. Future prompts may rely on it without restating information already recorded here.
 
@@ -129,7 +133,7 @@ When updating documentation:
 - Keep detail in specialised documents when it would make this root guide unwieldy.
 - In a read-only or audit-only task, report material drift instead of editing unless documentation changes are authorised.
 
-Before finishing every pass, check whether `CODEX.md` itself is stale, incorrect, or materially incomplete because of the work performed. Update it in the same pass when necessary, even when the user did not separately request documentation maintenance.
+Before finishing every pass, check whether `AGENTS.md` itself is stale, incorrect, or materially incomplete because of the work performed. Update it in the same pass when necessary, even when the user did not separately request documentation maintenance.
 
 ## 6. Scope and implementation discipline
 
@@ -189,8 +193,7 @@ Inspect existing manifest scripts before running them. Do not assume a command i
 First determine whether the project is actually under source control.
 
 - Do not assume Git is present.
-- Do not initialise Git, create branches, commit, push, alter remotes, add CI, or create repository metadata unless explicitly requested or already established as normal project practice.
-- Do not rely on `git diff`, `git status`, or history commands when the directory is not a Git worktree.
+- Treat the project as an established Git worktree. Use `git status`, `git diff`, and history commands when they are relevant to the task; do not commit, push, or alter remotes unless requested.
 - When Git is present, preserve unrelated user changes and do not discard or rewrite them.
 - Never use destructive source-control commands merely to obtain a clean working tree.
 - Report changed files explicitly whether or not source control is available.
@@ -360,6 +363,7 @@ Current decisions:
 - Ranking changes auto-save through `replace_user_ranking`; active shows may be omitted and therefore remain unranked. Missing ranking rows mean no expressed opinion, not a last-place ranking. Withdrawal removes that user's current rank for the show, and final withdrawal clears current rankings for the show so future reactivation starts unranked for everyone.
 - The current Board aggregate strategy is isolated and identified as `sequential-irv-v1`. Each user's explicit ranked queue is a partial ranked-choice ballot; unranked shows are absent. The Board sequence is produced by repeated instant-runoff elections over active, non-removed shows with at least one retained ranking input. Retained rankings from inactive users still influence the election.
 - Board confirmation is dynamic: active users are those with `is_active = true` and no revoked token, and a show is confirmed only when every currently active user has explicitly ranked it. With zero active users, no result is confirmed. The displayed Board ranking count is active users only; inactive-user contribution counts are not browser-facing.
+- Board cards with fewer than four active-user rankings display a top-right `Votes: N of 4` badge; aggregate scores and voter identities remain hidden.
 - Aggregate ties are deterministic and use canonical IMDb numeric value: strip non-digits, compare arbitrary-precision-safe numeric strings, let the higher value win winner ties, and let the lower value lose elimination ties first.
 - Board refresh uses token-authenticated revision polling when the Board is open, on focus/visibility return, and through a one-minute fallback interval; do not introduce Realtime infrastructure.
 - Enrolled posters and selected card artwork are retained in the `fff-artwork` R2 bucket under deterministic `posters/` and `card-art/` paths. Browser reads are served by the Worker; browser uploads are not permitted.
@@ -393,8 +397,8 @@ Every implementation report should state, where relevant:
 7. Safety-sensitive resources accessed or deliberately not accessed.
 8. Assumptions, limitations, risks, and unresolved decisions.
 9. Any documentation changed.
-10. Whether `CODEX.md` was checked.
-11. Whether `CODEX.md` was changed, and why or why not.
+10. Whether `AGENTS.md` was checked.
+11. Whether `AGENTS.md` was changed, and why or why not.
 
 Do not bury blockers, substitutions, failures, or unverified claims in general prose.
 
@@ -413,13 +417,13 @@ Validation:
 Not changed or not run:
 - ...
 
-CODEX.md:
+AGENTS.md:
 - Checked: yes
 - Updated: yes/no
 - Reason: ...
 ```
 
-## 19. CODEX.md closeout check
+## 19. AGENTS.md closeout check
 
 Before finishing every pass:
 
@@ -432,4 +436,4 @@ Before finishing every pass:
 7. Keep this file focused on information future agents need.
 8. State in the final report that the file was checked and whether it changed.
 
-This maintenance requirement applies even when the user does not mention `CODEX.md` in the current prompt.
+This maintenance requirement applies even when the user does not mention `AGENTS.md` in the current prompt.

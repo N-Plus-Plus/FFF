@@ -915,6 +915,7 @@ function renderBoard() {
         ${titleMarkup(entry)}
         ${metadataMarkup(entry)}
       </div>
+      ${entry.rankedCount < 4 ? `<span class="leader-vote-badge">Votes: ${entry.rankedCount} of 4</span>` : ""}
     `;
     wireInteractiveControls(card);
     return card;
