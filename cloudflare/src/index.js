@@ -23,6 +23,7 @@ export default {
         case "/v1/order": result = await order(user, env.DB); break;
         case "/v1/board": result = await board(user, env.DB); break;
         case "/v1/revision": result = await revision(env.DB); break;
+        case "/v1/admin/status": result = await adminStatus(user, env.DB); break;
         case "/v1/nominate": result = await nominate(user, input.imdbId, env); break;
         case "/v1/withdraw": result = await withdraw(user, input.showId, env.DB); break;
         case "/v1/ranking": result = await replaceRanking(user, input.showIds, env.DB); break;
@@ -61,6 +62,11 @@ const userJson = (u) => ({ id: u.id, display_name: u.display_name, is_admin: !!u
 async function order(user, db) { const shows = await activeShows(db); const ranks = (await db.prepare("SELECT show_id,rank_position FROM user_show_rankings WHERE user_id=? AND rank_position IS NOT NULL ORDER BY rank_position").bind(user.id).all()).results; const byId = new Map(shows.map((s) => [s.id, s])); const rankedIds = new Set(ranks.map((r) => r.show_id)); return { current_user: userJson(user), ranked: await Promise.all(ranks.filter((r) => byId.has(r.show_id)).map(async (r) => ({ ...await showJson(byId.get(r.show_id), user, db), rank_position: r.rank_position }))), unranked: await Promise.all(shows.filter((s) => !rankedIds.has(s.id)).map((s) => showJson(s, user, db))) }; }
 async function load(user, db) { const [c, o, b] = await Promise.all([catalogue(user, db), order(user, db), board(user, db)]); return { current_user: c.current_user, shows: c.shows, removed_shows: c.removed_shows, ranked: o.ranked, unranked: o.unranked, board: b }; }
 async function revision(db) { return (await db.prepare("SELECT board_revision AS revision,board_updated_at AS updated_at FROM app_revisions WHERE singleton=1").first()) || { revision: 0, updated_at: "" }; }
+async function adminStatus(user, db) {
+  if (!user.is_admin) throw http(403, "Administrator access is required.");
+  const counts = await db.prepare("SELECT (SELECT count(*) FROM app_users WHERE is_active=1 AND token_revoked_at IS NULL) AS active_user_count,(SELECT count(*) FROM shows WHERE admin_removed_at IS NOT NULL) AS removed_show_count").first();
+  return { current_user: userJson(user), active_user_count: Number(counts.active_user_count), removed_show_count: Number(counts.removed_show_count) };
+}
 async function bump(db) { await db.prepare("UPDATE app_revisions SET board_revision=board_revision+1,board_updated_at=? WHERE singleton=1").bind(now()).run(); }
 async function replaceRanking(user, ids, db) {
   if (!Array.isArray(ids) || new Set(ids).size !== ids.length) throw http(400, "Ranking sequence contains duplicate shows.");
