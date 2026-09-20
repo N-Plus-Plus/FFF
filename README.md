@@ -27,9 +27,9 @@ Canonical shows are deduplicated by normalized IMDb title ID. A valid canonical 
 
 Multiple users may nominate the same canonical IMDb show. A valid nomination by an active user makes the show active immediately; there is no pending, moderation, or approval queue. A user can have only one active nomination for a show; duplicate active nominations return an already-nominated result. Withdrawing a nomination affects only that user, removes that show from that user's current ranking, resequences their remaining ranked shows, and preserves canonical show rows plus historical nomination timestamps.
 
-Shows remain active while at least one nomination is active. When the final active nomination is withdrawn, the show leaves Add, Order, and Board responses automatically and all current ranking rows for that show are cleared. If nominated again later, the existing canonical row is reused and reactivated, but prior ranking positions are not restored; every user sees it as unranked until they rank it again.
+Shows remain active while at least one nomination is active. When the final active nomination is withdrawn, the show leaves Nominate, Rank, List, and Watch responses automatically and all current ranking rows for that show are cleared. If nominated again later, the existing canonical row is reused and reactivated, but prior ranking positions are not restored; every user sees it as unranked until they rank it again.
 
-Administrators can remove an active show from the ordinary app. Removal is reversible, records who removed it and when, and hides the show from Add, Order, Board, and search-as-catalogue results. There is no in-app removed-show history or restore UI.
+Administrators can remove an active show from the ordinary app. Removal is reversible, records who removed it and when, and hides the show from Nominate, Rank, List, Watch, and search-as-catalogue results. There is no in-app removed-show history or restore UI.
 
 Database-only restoration helper:
 
@@ -42,9 +42,9 @@ Run restoration only from an administrator-controlled database or service-role c
 
 ## Ordering and Board
 
-The Rank screen has separate Ranked and Unranked sections. Newly nominated active shows appear as Unranked for every user and do not create ranking rows for users who have not expressed an opinion. A user ranks a show only by moving it into Ranked, either with the add control, by tapping an Unranked card to append it, or by tap-holding a card for 0.25 seconds and dragging it into a Ranked insertion slot. Quick swipes before the hold completes remain normal page scrolling, and long-press card context menus are suppressed so slow drag starts are not interrupted. Ranked positions are strict, unique, contiguous, and transactionally replaced through `replace_user_ranking`.
+Rank contains only shows the current user has not ranked. With more than one, the user chooses a show before entering placement mode; its full show card is the actual centre element between clipped compact-row lanes above and below it. A vertical swipe transfers one compact row across that centre boundary at a time, while the proposed rank shows where confirmation will insert the show, including before #1 and after the final item. The List tab contains the current ranked sequence and retains arrow controls, removal, and secondary tap-hold reordering for small corrections. Newly nominated active shows remain unranked for every user and do not create ranking rows until explicitly placed. Ranked positions are strict, unique, contiguous, and transactionally replaced through `replace_user_ranking`.
 
-The app persistently reminds valid users when they have active unranked shows: the Rank tab shows a count and a non-blocking banner remains visible across Nominate, Rank, and Watch with a direct Order action. The banner has a dismiss control, and dismissal lasts only for the current browser session through `sessionStorage`. The reminder returns in a new browser session or when session state is cleared.
+The app persistently reminds valid users when they have active unranked shows: the Rank tab shows a count and a non-blocking banner remains visible across Nominate, Rank, List, and Watch with a direct Rank action. The banner has a dismiss control, and dismissal lasts only for the current browser session through `sessionStorage`. The reminder returns in a new browser session or when session state is cleared.
 
 The current aggregate strategy is `sequential-irv-v1`, implemented in `ranking.js` and SQL `calculate_provisional_board`. Each user's ranked queue is a partial ranked-choice ballot. Unranked shows are absent from that user's ballot and never count as a synthetic last-place preference.
 
@@ -75,7 +75,7 @@ TVDB is only a fallback enrichment source after TVmaze successfully resolves can
 
 TVmaze data is licensed under CC BY-SA. The current app shell does not render provider attribution copy in the Add UI.
 
-Show cards stay restrained: stored card artwork when available, title linked to IMDb when available, commenced year or ended year range, season and episode count when known, exact total runtime when known, rank or aggregate position, and required actions. The Order view alone overlays TVmaze's `/10` rating as five Straw SVG stars, rounded to the nearest half-star. Runtime is labelled "Total Runtime" and is displayed only when exact/provider-supplied; estimated cumulative runtime is not derived or shown. Background and banner artwork render as card backgrounds with a dark text overlay; poster fallback behaviour remains intact when no horizontal artwork exists. On load, rendered card backgrounds are checked against TVmaze's selected card-art dimensions and stale persisted artwork is refreshed through the metadata Edge Function when a mismatch is detected.
+Show cards stay restrained: stored card artwork when available, title linked to IMDb when available, commenced year or ended year range, season and episode count when known, exact total runtime when known, rank or aggregate position, and required actions. The List view alone overlays TVmaze's `/10` rating as five Straw SVG stars, rounded to the nearest half-star. Runtime is labelled "Total Runtime" and is displayed only when exact/provider-supplied; estimated cumulative runtime is not derived or shown. Background and banner artwork render as card backgrounds with a dark text overlay; poster fallback behaviour remains intact when no horizontal artwork exists. On load, rendered card backgrounds are checked against TVmaze's selected card-art dimensions and stale persisted artwork is refreshed through the metadata Edge Function when a mismatch is detected.
 
 ## Poster Storage
 
@@ -119,6 +119,8 @@ http://localhost:3000/?demo=1
 The batch file serves the repository on `0.0.0.0:3000`, prints the local URL, and shows the LAN URL pattern for testing from another device on the same network. If Windows Firewall prompts for Python, allow private-network access for device testing.
 
 When testing live Supabase Edge Function calls from another device, the LAN origin printed by the batch file, such as `http://192.168.1.23:3000`, must also be present in the deployed `ALLOWED_ORIGINS` secret. Localhost and `127.0.0.1` testing on this computer are covered by the Edge Function's built-in loopback-origin allowance, regardless of the local server port.
+
+For a repeatable narrow-viewport check of Rank placement, install the development tools once with `npm install` and `npx playwright install chromium`, keep the local server running, then run `node scripts/placement-browser-test.mjs`. It uses an isolated `?demo=1` browser state and writes an ignored screenshot for visual inspection.
 
 Production mode does not fall back to demo data. `config.js` must contain only:
 

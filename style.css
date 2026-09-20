@@ -716,12 +716,137 @@ h2 {
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.35rem;
   padding: 0.55rem 0.7rem calc(0.55rem + var(--safe-bottom));
   border-top: var(--border-width) solid var(--paper);
   background: rgb(34 34 34 / 0.96);
   backdrop-filter: blur(12px);
+}
+
+.rank-choice-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  cursor: pointer;
+}
+
+.rank-choice-card__action {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  color: var(--lavender);
+}
+
+.rank-choice-card__action .lucide {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.placement-mode {
+  margin: -0.4rem -14px 0;
+}
+
+.placement-stage {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  height: calc(100dvh - 174px - var(--safe-bottom));
+  min-height: 25rem;
+  overflow: hidden;
+  touch-action: none;
+  outline: 0;
+}
+
+.placement-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  padding-inline: 14px;
+}
+
+.placement-track {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  display: grid;
+  gap: 0.25rem;
+  will-change: transform;
+}
+
+.placement-track--above {
+  bottom: 0;
+}
+
+.placement-track--below {
+  top: 0;
+}
+
+.placement-row,
+.placement-passing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.15rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--asphalt);
+  border-radius: var(--radius-container);
+  background: rgb(34 34 34 / 0.84);
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.placement-row span,
+.placement-passing-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placement-row strong,
+.placement-passing-row strong {
+  margin-left: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-numeric);
+}
+
+.placement-card {
+  z-index: 2;
+  margin: 0 14px;
+  border-color: var(--mint);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.6);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.placement-passing-row {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.placement-stage.is-settling .placement-track {
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.placement-result {
+  margin: 0.55rem 0 0;
+  color: var(--mint);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.placement-actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 0.35rem;
+  align-self: end;
+}
+
+.placement-confirm {
+  background: var(--emerald);
+  color: #111;
 }
 
 .bottom-tab {

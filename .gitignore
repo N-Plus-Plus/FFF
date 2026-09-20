@@ -10,3 +10,4 @@ Thumbs.db
 cloudflare/private-*.json
 cloudflare/private-*.sql
 cloudflare/artwork-tmp/
+playwright-placement.png

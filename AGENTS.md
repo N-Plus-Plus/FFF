@@ -33,13 +33,13 @@ The project is now an initial static web app scaffold.
 | Project maturity | Static scaffold with Supabase architecture established |
 | Application shape | Static GitHub Pages app with raw HTML, CSS, and JavaScript ES modules |
 | Languages and runtime | Browser JavaScript, HTML, CSS; no build step |
-| Frameworks and major libraries | Raw browser JavaScript; no runtime third-party data client |
-| Package manager | None established |
+| Frameworks and major libraries | Raw browser JavaScript; Playwright/Chromium are development-only browser verification tools, with no runtime third-party data client |
+| Package manager | npm, for development-only tooling |
 | Persistence or database | Cloudflare D1 (`fff`, Oceania) is the frontend target through Worker `fff-api`; Supabase Postgres remains intact as rollback and historical source. Opt-in localStorage demo with `?demo=1` |
 | External services | Cloudflare Workers, D1, R2, and Cron Trigger; TVmaze primary television metadata; Supabase remains rollback/historical infrastructure |
 | Deployment target | GitHub Pages |
 | Source-control policy | Git worktree on `main` with `origin` at `https://github.com/N-Plus-Plus/FFF.git`; preserve unrelated user changes and do not push, commit, or rewrite history unless explicitly requested |
-| Test framework | None established |
+| Test framework | Targeted Playwright placement smoke check in `scripts/placement-browser-test.mjs` |
 | Build, run, and verification commands | See project commands |
 | Supabase operations | Codex may operate the linked Supabase project when the user explicitly requests backend control; use dry runs or read-only inspection first when practical, avoid destructive resets, and report live changes clearly |
 
@@ -82,7 +82,7 @@ Maintain this section as the project develops. It should help a future agent fin
 | Cloudflare migration | `wrangler.jsonc`, D1 schema in `cloudflare/migrations/`, Worker API in `cloudflare/src/index.js`, and private-export conversion helper in `cloudflare/scripts/import-d1.mjs` |
 | Configuration | `config.js` |
 | Shared utilities | Small ES modules in `store.js`, `providers.js`, and `ranking.js` |
-| Tests | Not established |
+| Tests | `scripts/placement-browser-test.mjs` exercises the mobile Rank placement interaction in isolated `?demo=1` browser storage |
 | Build and deployment | Static files served by GitHub Pages; no build step |
 | Further documentation | `README.md` |
 
@@ -325,11 +325,11 @@ Replace this table as commands become established. Verify commands from the curr
 
 | Purpose | Command |
 | --- | --- |
-| Install dependencies | Not established |
+| Install dependencies | `npm install`; install Chromium for browser verification with `npx playwright install chromium` |
 | Start development mode | `.\start-local-server.bat` for port 3000 device testing, or `python -m http.server 3000 --bind 0.0.0.0` |
 | Build | Not applicable; static files are served directly |
 | Start production mode | GitHub Pages serves the repository files directly |
-| Targeted tests | `node --check app.js`; `node --check store.js`; `node --check providers.js`; `node --check ranking.js`; `node --check scripts/verify-contracts.mjs`; `node scripts/verify-contracts.mjs` |
+| Targeted tests | `node --check app.js`; `node --check store.js`; `node --check providers.js`; `node --check ranking.js`; `node --check scripts/verify-contracts.mjs`; `node scripts/verify-contracts.mjs`; with a local server already running, `node scripts/placement-browser-test.mjs` |
 | Full test suite | Not established |
 | Type checking | Not established |
 | Linting | Not established |

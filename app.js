@@ -22,8 +22,9 @@ const dom = {
   unrankedBadge: document.querySelector("#unrankedBadge"),
   searchResults: document.querySelector("#searchResults"),
   catalogueList: document.querySelector("#catalogueList"),
+  rankChoices: document.querySelector("#rankChoices"),
+  placementMode: document.querySelector("#placementMode"),
   rankedList: document.querySelector("#rankedList"),
-  unrankedList: document.querySelector("#unrankedList"),
   sequenceStatus: document.querySelector("#sequenceStatus"),
   retrySaveButton: document.querySelector("#retrySaveButton"),
   boardStatus: document.querySelector("#boardStatus"),
@@ -46,6 +47,9 @@ const appState = {
   searchLoading: false,
   board: { revision: 0, updatedAt: "", entries: [] },
   activeTab: "add",
+  placement: null,
+  placementSnapTimer: 0,
+  rankDismissedShowId: "",
   backgroundAuditQueued: false,
   backgroundAuditInFlight: false,
   pendingDragCard: null,
@@ -163,7 +167,8 @@ function render() {
     : "Unknown user";
   renderSearchResults();
   renderCatalogue();
-  renderOrder();
+  renderRank();
+  renderList();
   renderUnrankedReminder();
   renderBoard();
   refreshIcons();
@@ -175,7 +180,8 @@ function renderFatalError(message) {
   dom.appNotice.textContent = message;
   dom.searchResults.innerHTML = emptyState(message);
   dom.rankedList.innerHTML = emptyState(message);
-  dom.unrankedList.innerHTML = "";
+  dom.rankChoices.innerHTML = "";
+  dom.placementMode.replaceChildren();
   dom.leaderboardList.innerHTML = emptyState(message);
 }
 
@@ -195,11 +201,15 @@ function setLoading(message) {
   dom.searchResults.hidden = true;
   dom.searchResults.replaceChildren();
   dom.rankedList.innerHTML = emptyState(message);
-  dom.unrankedList.innerHTML = "";
+  dom.rankChoices.innerHTML = "";
+  dom.placementMode.replaceChildren();
   dom.leaderboardList.innerHTML = emptyState(message);
 }
 
 function setActiveTab(tabName) {
+  if (appState.placement && tabName !== "rank") {
+    cancelPlacement();
+  }
   const tabChanged = appState.activeTab !== tabName;
   appState.activeTab = tabName;
   dom.tabs.forEach((tab) => {
@@ -208,7 +218,9 @@ function setActiveTab(tabName) {
     tab.setAttribute("aria-selected", String(isActive));
   });
   dom.panels.forEach((panel) => {
-    panel.classList.toggle("is-active", panel.dataset.panel === tabName);
+    const isActive = panel.dataset.panel === tabName;
+    panel.classList.toggle("is-active", isActive);
+    panel.setAttribute("aria-hidden", String(!isActive));
   });
   if (tabName === "board") {
     refreshBoard("Opened Board");
@@ -454,9 +466,8 @@ function renderShowActions(container, show, options = {}) {
   refreshIcons(container);
 }
 
-function renderOrder() {
+function renderList() {
   renderSaveStatus();
-  renderUnrankedReminder();
   const rankedChildren = appState.ranked.map((show, index) => rankedCard(show, index));
   const shouldShowRankedPlaceholder = appState.draggingShowId && appState.dragRankedInsertIndex !== null;
   if (shouldShowRankedPlaceholder) {
@@ -470,12 +481,271 @@ function renderOrder() {
     dom.rankedList.replaceChildren(...rankedChildren);
   }
 
-  if (!appState.unranked.length) {
-    dom.unrankedList.innerHTML = emptyState("Every active show is ranked.");
-  } else {
-    dom.unrankedList.replaceChildren(...appState.unranked.map((show) => unrankedCard(show)));
-  }
   refreshIcons();
+}
+
+function renderRank() {
+  if (appState.placement) {
+    renderPlacement();
+    return;
+  }
+  dom.placementMode.hidden = true;
+  dom.placementMode.replaceChildren();
+  if (!appState.unranked.length) {
+    dom.rankChoices.innerHTML = emptyState("You have ranked every active show.");
+    return;
+  }
+  if (appState.unranked.length === 1 && appState.rankDismissedShowId !== appState.unranked[0].id) {
+    beginPlacement(appState.unranked[0].id);
+    return;
+  }
+  const heading = document.createElement("h3");
+  heading.className = "list-heading list-heading--inset";
+  heading.textContent = "What would you like to place?";
+  dom.rankChoices.replaceChildren(heading, ...appState.unranked.map(rankChoiceCard));
+  refreshIcons();
+}
+
+function rankChoiceCard(show) {
+  const card = document.createElement("article");
+  card.className = "show-card rank-choice-card";
+  card.innerHTML = `${backgroundMarkup(show)}<div class="show-meta">${titleMarkup(show)}${metadataMarkup(show)}</div><div class="rank-choice-card__action"><i data-lucide="chevron-right" aria-hidden="true"></i></div>`;
+  card.addEventListener("click", () => beginPlacement(show.id));
+  wireInteractiveControls(card);
+  return card;
+}
+
+function beginPlacement(showId) {
+  const show = appState.unranked.find((item) => item.id === showId);
+  if (!show) {
+    renderRank();
+    return;
+  }
+  appState.placement = {
+    showId,
+    insertIndex: appState.ranked.length,
+    rankedIds: appState.ranked.map((item) => item.id).join(","),
+    restScrollTop: 0
+  };
+  appState.rankDismissedShowId = "";
+  renderRank();
+}
+
+function cancelPlacement() {
+  window.clearTimeout(appState.placementSnapTimer);
+  appState.rankDismissedShowId = appState.placement?.showId || "";
+  appState.placement = null;
+  if (appState.activeTab === "rank") {
+    renderRank();
+  }
+}
+
+function renderPlacement() {
+  const placement = appState.placement;
+  const show = placement && appState.unranked.find((item) => item.id === placement.showId);
+  if (!placement || !show || placement.rankedIds !== appState.ranked.map((item) => item.id).join(",")) {
+    appState.placement = null;
+    showToast("Your ranking changed. Please choose the show again.", "info");
+    renderRank();
+    refreshRankingAfterInvalidPlacement();
+    return;
+  }
+  dom.rankChoices.replaceChildren();
+  dom.placementMode.hidden = false;
+  const stage = document.createElement("div");
+  stage.className = "placement-stage";
+  stage.tabIndex = 0;
+  stage.setAttribute("aria-label", "Swipe to choose the position in your ranking");
+  const aboveViewport = document.createElement("div");
+  aboveViewport.className = "placement-viewport placement-viewport--above";
+  const aboveRows = document.createElement("div");
+  aboveRows.className = "placement-track placement-track--above";
+  aboveViewport.append(aboveRows);
+  const selected = placementCard(show, placement.insertIndex);
+  const belowViewport = document.createElement("div");
+  belowViewport.className = "placement-viewport placement-viewport--below";
+  const belowRows = document.createElement("div");
+  belowRows.className = "placement-track placement-track--below";
+  belowViewport.append(belowRows);
+  stage.append(aboveViewport, selected, belowViewport);
+  dom.placementMode.replaceChildren(stage);
+  requestAnimationFrame(() => sizePlacementStage(stage));
+  renderPlacementLanes(stage);
+  bindPlacementGestures(stage);
+  refreshIcons();
+}
+
+function placementRow(show, index) {
+  const row = document.createElement("div");
+  row.className = "placement-row";
+  row.dataset.showId = show.id;
+  row.innerHTML = `<span>${escapeHtml(show.title)}</span><strong>#${index + 1}</strong>`;
+  return row;
+}
+
+function renderPlacementLanes(stage) {
+  const placement = appState.placement;
+  const above = stage.querySelector(".placement-track--above");
+  const below = stage.querySelector(".placement-track--below");
+  above.replaceChildren(...appState.ranked.slice(0, placement.insertIndex).map(placementRow));
+  below.replaceChildren(...appState.ranked.slice(placement.insertIndex).map((show, index) => placementRow(show, placement.insertIndex + index)));
+  updatePlacementCopy(stage.querySelector(".placement-card"), placement.insertIndex);
+}
+
+function sizePlacementStage(stage) {
+  const tabs = document.querySelector(".bottom-tabs");
+  const bottom = tabs?.getBoundingClientRect().top || window.innerHeight;
+  const top = stage.getBoundingClientRect().top;
+  stage.style.height = `${Math.max(280, bottom - top)}px`;
+}
+
+function bindPlacementGestures(stage) {
+  let pointerId = null;
+  let lastY = 0;
+  stage.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button, a")) return;
+    pointerId = event.pointerId;
+    lastY = event.clientY;
+    stage.setPointerCapture(pointerId);
+    stage.classList.add("is-dragging-placement");
+  });
+  stage.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== pointerId) return;
+    event.preventDefault();
+    movePlacementBy(stage, event.clientY - lastY);
+    lastY = event.clientY;
+  });
+  const finish = (event) => {
+    if (event.pointerId !== pointerId) return;
+    pointerId = null;
+    stage.classList.remove("is-dragging-placement");
+    settlePlacementLanes(stage);
+  };
+  stage.addEventListener("pointerup", finish);
+  stage.addEventListener("pointercancel", finish);
+  stage.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    movePlacementBy(stage, -event.deltaY);
+    window.clearTimeout(appState.placementSnapTimer);
+    appState.placementSnapTimer = window.setTimeout(() => settlePlacementLanes(stage), 200);
+  }, { passive: false });
+  stage.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowUp") movePlacementBy(stage, 54);
+    else if (event.key === "ArrowDown") movePlacementBy(stage, -54);
+    else return;
+    event.preventDefault();
+    settlePlacementLanes(stage);
+  });
+}
+
+function movePlacementBy(stage, distance) {
+  const placement = appState.placement;
+  if (!placement) return;
+  placement.dragOffset = (placement.dragOffset || 0) + distance;
+  const rowHeight = 54;
+  while (placement.dragOffset <= -rowHeight && placement.insertIndex < appState.ranked.length) {
+    placement.dragOffset += rowHeight;
+    transferPlacementLaneRow(stage, 1);
+  }
+  while (placement.dragOffset >= rowHeight && placement.insertIndex > 0) {
+    placement.dragOffset -= rowHeight;
+    transferPlacementLaneRow(stage, -1);
+  }
+  applyPlacementLaneOffset(stage);
+}
+
+function transferPlacementLaneRow(stage, direction) {
+  const placement = appState.placement;
+  const oldIndex = placement.insertIndex;
+  const show = appState.ranked[direction > 0 ? oldIndex : oldIndex - 1];
+  const source = stage.querySelector(`[data-show-id="${CSS.escape(show.id)}"]`);
+  const sourceRect = source?.getBoundingClientRect();
+  placement.insertIndex += direction;
+  renderPlacementLanes(stage);
+  const destination = stage.querySelector(`[data-show-id="${CSS.escape(show.id)}"]`);
+  if (sourceRect && destination) animatePlacementPass(stage, source, sourceRect, destination.getBoundingClientRect());
+}
+
+function applyPlacementLaneOffset(stage) {
+  const offset = appState.placement?.dragOffset || 0;
+  stage.querySelectorAll(".placement-track").forEach((track) => {
+    track.style.transform = `translateY(${offset}px)`;
+  });
+}
+
+function settlePlacementLanes(stage) {
+  window.clearTimeout(appState.placementSnapTimer);
+  if (!appState.placement) return;
+  stage.classList.add("is-settling");
+  appState.placement.dragOffset = 0;
+  applyPlacementLaneOffset(stage);
+  window.setTimeout(() => stage.classList.remove("is-settling"), 200);
+}
+
+function animatePlacementPass(stage, source, sourceRect, destinationRect) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const stageRect = stage.getBoundingClientRect();
+  const ghost = source.cloneNode(true);
+  ghost.className = "placement-passing-row";
+  ghost.style.left = `${sourceRect.left - stageRect.left}px`;
+  ghost.style.top = `${sourceRect.top - stageRect.top}px`;
+  ghost.style.width = `${sourceRect.width}px`;
+  stage.append(ghost);
+  const destination = stage.querySelector(`[data-show-id="${CSS.escape(source.dataset.showId)}"]`);
+  if (destination) destination.style.visibility = "hidden";
+  const restingDestinationTop = destinationRect.top - (appState.placement?.dragOffset || 0);
+  const dy = restingDestinationTop - sourceRect.top;
+  ghost.animate([{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${dy}px)`, opacity: 1 }], { duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }).finished.finally(() => {
+    ghost.remove();
+    if (destination?.isConnected) destination.style.visibility = "";
+  });
+}
+
+function placementCard(show, insertIndex) {
+  const card = document.createElement("article");
+  card.className = "show-card placement-card";
+  card.innerHTML = `${backgroundMarkup(show)}<div class="show-meta">${titleMarkup(show)}${metadataMarkup(show)}<p class="placement-result" data-placement-result></p></div><div class="placement-actions"><button class="icon-button" type="button" data-cancel aria-label="Cancel placement"><i data-lucide="x" aria-hidden="true"></i></button><button class="icon-button placement-confirm" type="button" data-confirm aria-label="Confirm placement"><i data-lucide="check" aria-hidden="true"></i></button></div>`;
+  card.querySelector("[data-cancel]").addEventListener("click", cancelPlacement);
+  card.querySelector("[data-confirm]").addEventListener("click", confirmPlacement);
+  updatePlacementCopy(card, insertIndex);
+  wireInteractiveControls(card);
+  return card;
+}
+
+function updatePlacementCopy(card, insertIndex) {
+  const result = card.querySelector("[data-placement-result]");
+  if (result) result.textContent = `Place at #${insertIndex + 1}`;
+}
+
+async function confirmPlacement() {
+  const placement = appState.placement;
+  const stillValid = placement
+    && placement.rankedIds === appState.ranked.map((item) => item.id).join(",")
+    && appState.unranked.some((item) => item.id === placement.showId);
+  if (!stillValid) {
+    appState.placement = null;
+    showToast("That show or ranking changed. Refreshing your list.", "error");
+    renderRank();
+    await refreshRankingAfterInvalidPlacement();
+    return;
+  }
+  const show = appState.unranked.splice(appState.unranked.findIndex((item) => item.id === placement.showId), 1)[0];
+  window.clearTimeout(appState.placementSnapTimer);
+  appState.ranked.splice(placement.insertIndex, 0, show);
+  appState.placement = null;
+  markRankingChanged();
+  renderRank();
+  renderList();
+  renderUnrankedReminder();
+}
+
+async function refreshRankingAfterInvalidPlacement() {
+  try {
+    await reloadOrderAndCatalogue();
+    render();
+  } catch (error) {
+    showToast("Could not refresh your ranking. Please reopen the link.", "error");
+  }
 }
 
 function rankedCard(show, index) {
@@ -503,31 +773,6 @@ function rankedCard(show, index) {
   card.querySelector('[data-move="up"]').addEventListener("click", () => moveRanked(show.id, -1));
   card.querySelector('[data-move="down"]').addEventListener("click", () => moveRanked(show.id, 1));
   card.querySelector("[data-remove]").addEventListener("click", () => unrankShow(show.id));
-  card.addEventListener("pointerdown", beginDrag);
-  suppressCardContextMenu(card);
-  wireInteractiveControls(card);
-  return card;
-}
-
-function unrankedCard(show) {
-  const card = document.createElement("article");
-  card.className = "show-card show-card--unranked";
-  card.dataset.showId = show.id;
-  card.dataset.zone = "unranked";
-  card.classList.toggle("is-dragging", appState.draggingShowId === show.id);
-  card.innerHTML = `
-    <div class="rank-number">-</div>
-      ${backgroundMarkup(show)}
-      <div class="show-meta">
-      ${titleMarkup(show)}
-      ${metadataMarkup(show)}
-    </div>
-    ${ratingStarsMarkup(show)}
-    <div class="rank-controls">
-      <button class="icon-button" type="button" data-rank aria-label="Add to ranking"><i data-lucide="plus" aria-hidden="true"></i></button>
-    </div>
-  `;
-  card.querySelector("[data-rank]").addEventListener("click", () => rankShow(show.id));
   card.addEventListener("pointerdown", beginDrag);
   suppressCardContextMenu(card);
   wireInteractiveControls(card);
@@ -595,12 +840,7 @@ function finishPendingDrag() {
     return;
   }
   const card = appState.pendingDragCard;
-  const sourceZone = card?.dataset.zone || "";
-  const showId = card?.dataset.showId;
   clearPendingDrag();
-  if (sourceZone === "unranked" && showId) {
-    rankShow(showId);
-  }
 }
 
 function cancelPendingDrag() {
@@ -676,20 +916,18 @@ function commitRankedDrag() {
   if (!appState.draggingShowId || appState.dragRankedInsertIndex === null) {
     return;
   }
-  const sourceZone = appState.draggingSourceZone;
   const showId = appState.draggingShowId;
-  const sourceList = sourceZone === "unranked" ? appState.unranked : appState.ranked;
-  const sourceIndex = sourceList.findIndex((show) => show.id === showId);
+  const sourceIndex = appState.ranked.findIndex((show) => show.id === showId);
   if (sourceIndex === -1) {
     return;
   }
 
-  const [show] = sourceList.splice(sourceIndex, 1);
+  const [show] = appState.ranked.splice(sourceIndex, 1);
   let insertIndex = Math.max(0, Math.min(appState.dragRankedInsertIndex, appState.ranked.length));
-  if (sourceZone === "ranked" && sourceIndex < insertIndex) {
+  if (sourceIndex < insertIndex) {
     insertIndex -= 1;
   }
-  if (sourceZone === "ranked" && sourceIndex === insertIndex) {
+  if (sourceIndex === insertIndex) {
     appState.ranked.splice(sourceIndex, 0, show);
     return;
   }
@@ -710,7 +948,7 @@ function cancelDrag() {
   clearPendingDrag();
   clearDragListeners();
   clearDragState();
-  renderOrder();
+  renderList();
 }
 
 function clearDragListeners() {
@@ -732,13 +970,13 @@ function clearDragState() {
 function updateOrderWithMotion(mutator) {
   const before = snapshotOrderCardRects();
   mutator();
-  renderOrder();
+  renderList();
   animateOrderCardMoves(before);
 }
 
 function snapshotOrderCardRects() {
   const rects = new Map();
-  [...dom.rankedList.querySelectorAll(".show-card"), ...dom.unrankedList.querySelectorAll(".show-card")].forEach((card) => {
+  dom.rankedList.querySelectorAll(".show-card").forEach((card) => {
     if (card.dataset.showId) {
       rects.set(card.dataset.showId, card.getBoundingClientRect());
     }
@@ -750,7 +988,7 @@ function animateOrderCardMoves(before) {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     return;
   }
-  [...dom.rankedList.querySelectorAll(".show-card"), ...dom.unrankedList.querySelectorAll(".show-card")].forEach((card) => {
+  dom.rankedList.querySelectorAll(".show-card").forEach((card) => {
     const previous = before.get(card.dataset.showId);
     if (!previous || typeof card.animate !== "function") {
       return;
@@ -780,20 +1018,7 @@ function moveRanked(showId, direction) {
   const [show] = appState.ranked.splice(index, 1);
   appState.ranked.splice(nextIndex, 0, show);
   markRankingChanged();
-  renderOrder();
-}
-
-function rankShow(showId, options = {}) {
-  const index = appState.unranked.findIndex((show) => show.id === showId);
-  if (index === -1) {
-    return;
-  }
-  const [show] = appState.unranked.splice(index, 1);
-  appState.ranked.push(show);
-  markRankingChanged();
-  if (options.render !== false) {
-    renderOrder();
-  }
+  renderList();
 }
 
 function unrankShow(showId) {
@@ -805,7 +1030,9 @@ function unrankShow(showId) {
   appState.unranked.push(show);
   appState.unranked.sort((a, b) => a.title.localeCompare(b.title));
   markRankingChanged();
-  renderOrder();
+  renderRank();
+  renderList();
+  renderUnrankedReminder();
 }
 
 function markRankingChanged() {
@@ -836,7 +1063,9 @@ async function flushSaveQueue() {
       appState.unranked = result.unranked;
       appState.saveStatus = "saved";
       await refreshBoard("Ranking saved");
-      renderOrder();
+      renderRank();
+      renderList();
+      renderUnrankedReminder();
     }
   } catch (error) {
     if (appState.saveVersion === version) {
