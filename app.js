@@ -222,6 +222,7 @@ function setActiveTab(tabName) {
     panel.classList.toggle("is-active", isActive);
     panel.setAttribute("aria-hidden", String(!isActive));
   });
+  renderUnrankedReminder();
   if (tabName === "board") {
     refreshBoard("Opened Board");
   }
@@ -630,8 +631,8 @@ function bindPlacementGestures(stage) {
     appState.placementSnapTimer = window.setTimeout(() => settlePlacementLanes(stage), 200);
   }, { passive: false });
   stage.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowUp") movePlacementBy(stage, 54);
-    else if (event.key === "ArrowDown") movePlacementBy(stage, -54);
+    if (event.key === "ArrowUp") movePlacementBy(stage, placementRowStep(stage));
+    else if (event.key === "ArrowDown") movePlacementBy(stage, -placementRowStep(stage));
     else return;
     event.preventDefault();
     settlePlacementLanes(stage);
@@ -642,28 +643,44 @@ function movePlacementBy(stage, distance) {
   const placement = appState.placement;
   if (!placement) return;
   placement.dragOffset = (placement.dragOffset || 0) + distance;
-  const rowHeight = 54;
-  while (placement.dragOffset <= -rowHeight && placement.insertIndex < appState.ranked.length) {
-    placement.dragOffset += rowHeight;
-    transferPlacementLaneRow(stage, 1);
+  const rowHeight = placementRowStep(stage);
+  const transfers = [];
+  let remainingOffset = placement.dragOffset;
+  let remainingIndex = placement.insertIndex;
+  while (remainingOffset <= -rowHeight && remainingIndex < appState.ranked.length) {
+    remainingOffset += rowHeight;
+    remainingIndex += 1;
+    transfers.push(1);
   }
-  while (placement.dragOffset >= rowHeight && placement.insertIndex > 0) {
-    placement.dragOffset -= rowHeight;
-    transferPlacementLaneRow(stage, -1);
+  while (remainingOffset >= rowHeight && remainingIndex > 0) {
+    remainingOffset -= rowHeight;
+    remainingIndex -= 1;
+    transfers.push(-1);
   }
+  applyPlacementLaneOffset(stage);
+  transfers.forEach((direction, index) => {
+    placement.dragOffset += direction > 0 ? rowHeight : -rowHeight;
+    transferPlacementLaneRow(stage, direction, index === transfers.length - 1);
+  });
   applyPlacementLaneOffset(stage);
 }
 
-function transferPlacementLaneRow(stage, direction) {
+function placementRowStep(stage) {
+  const row = stage.querySelector(".placement-row");
+  return row ? row.getBoundingClientRect().height + 4 : 54;
+}
+
+function transferPlacementLaneRow(stage, direction, animate = true) {
   const placement = appState.placement;
   const oldIndex = placement.insertIndex;
   const show = appState.ranked[direction > 0 ? oldIndex : oldIndex - 1];
   const source = stage.querySelector(`[data-show-id="${CSS.escape(show.id)}"]`);
   const sourceRect = source?.getBoundingClientRect();
   placement.insertIndex += direction;
+  applyPlacementLaneOffset(stage);
   renderPlacementLanes(stage);
   const destination = stage.querySelector(`[data-show-id="${CSS.escape(show.id)}"]`);
-  if (sourceRect && destination) animatePlacementPass(stage, source, sourceRect, destination.getBoundingClientRect());
+  if (animate && sourceRect && destination) animatePlacementPass(stage, source, sourceRect, destination.getBoundingClientRect());
 }
 
 function applyPlacementLaneOffset(stage) {
@@ -684,6 +701,7 @@ function settlePlacementLanes(stage) {
 
 function animatePlacementPass(stage, source, sourceRect, destinationRect) {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (stage.querySelector(".placement-passing-row")) return;
   const stageRect = stage.getBoundingClientRect();
   const ghost = source.cloneNode(true);
   ghost.className = "placement-passing-row";
@@ -693,8 +711,7 @@ function animatePlacementPass(stage, source, sourceRect, destinationRect) {
   stage.append(ghost);
   const destination = stage.querySelector(`[data-show-id="${CSS.escape(source.dataset.showId)}"]`);
   if (destination) destination.style.visibility = "hidden";
-  const restingDestinationTop = destinationRect.top - (appState.placement?.dragOffset || 0);
-  const dy = restingDestinationTop - sourceRect.top;
+  const dy = destinationRect.top - sourceRect.top;
   ghost.animate([{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${dy}px)`, opacity: 1 }], { duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }).finished.finally(() => {
     ghost.remove();
     if (destination?.isConnected) destination.style.visibility = "";
@@ -1377,7 +1394,7 @@ function renderUnrankedReminder() {
   const count = appState.currentUser ? appState.unranked.length : 0;
   dom.unrankedBadge.hidden = count === 0;
   dom.unrankedBadge.textContent = String(count);
-  dom.unrankedReminder.hidden = count === 0 || appState.unrankedReminderDismissed;
+  dom.unrankedReminder.hidden = count === 0 || appState.unrankedReminderDismissed || appState.activeTab === "rank";
   dom.unrankedReminderTitle.textContent = `${count} unranked show${count === 1 ? "" : "s"}`;
   dom.unrankedReminderText.textContent = "Get ranking!";
 }

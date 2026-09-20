@@ -8,6 +8,10 @@ type RefreshCandidate = {
   poster_storage_path?: string | null;
   poster_source_url?: string | null;
   card_art_storage_path?: string | null;
+  card_art_source_url?: string | null;
+  card_art_type?: string | null;
+  card_art_width?: number | null;
+  card_art_height?: number | null;
 };
 
 type NormalizedTitle = {
@@ -106,7 +110,11 @@ Deno.serve(async (request) => {
         p_metadata: metadataPayload(merged)
       });
 
-      if (!candidate.card_art_storage_path && merged.card_art_url && merged.card_art_type !== "placeholder") {
+      const cardArtChanged = candidate.card_art_source_url !== merged.card_art_url
+        || candidate.card_art_type !== merged.card_art_type
+        || Number(candidate.card_art_width || 0) !== Number(merged.card_art_width || 0)
+        || Number(candidate.card_art_height || 0) !== Number(merged.card_art_height || 0);
+      if ((!candidate.card_art_storage_path || cardArtChanged) && merged.card_art_url && merged.card_art_type !== "placeholder") {
         const cardArtResult = await copyCardArtToStorage(supabase, merged).catch((artError) => ({
           path: null,
           status: artError instanceof PosterError ? artError.kind : "failed"

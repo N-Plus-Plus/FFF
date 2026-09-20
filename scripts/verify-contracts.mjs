@@ -201,13 +201,13 @@ function verifyProviders() {
 
 function verifyTvmazeCardArt() {
   const show = { image: { original: "https://example.invalid/poster.jpg" } };
-  const background = selectTvmazeCardArt(show, [
+  const panoramicBanner = selectTvmazeCardArt(show, [
     { type: "background", main: false, resolutions: { original: { url: "https://example.invalid/bg-a.jpg", width: 100, height: 50 } } },
     { type: "background", main: true, resolutions: { original: { url: "https://example.invalid/bg-main.jpg", width: 120, height: 60 } } },
     { type: "banner", main: true, resolutions: { original: { url: "https://example.invalid/banner.jpg", width: 900, height: 200 } } }
   ]);
-  assert.equal(background.type, "background", "background art has highest priority");
-  assert.equal(background.sourceUrl, "https://example.invalid/bg-main.jpg", "main background is preferred");
+  assert.equal(panoramicBanner.type, "banner", "the closest panoramic art is preferred");
+  assert.equal(panoramicBanner.sourceUrl, "https://example.invalid/banner.jpg");
 
   const banner = selectTvmazeCardArt(show, [
     { type: "banner", main: false, resolutions: { medium: { url: "https://example.invalid/banner-medium.jpg", width: 500, height: 140 } } },
@@ -215,6 +215,12 @@ function verifyTvmazeCardArt() {
   ]);
   assert.equal(banner.type, "banner", "banner is used when no background exists");
   assert.equal(banner.sourceUrl, "https://example.invalid/banner-main.jpg", "main banner original is preferred");
+
+  const mainTieBreak = selectTvmazeCardArt(show, [
+    { type: "banner", main: false, resolutions: { original: { url: "https://example.invalid/banner-a.jpg", width: 1000, height: 200 } } },
+    { type: "banner", main: true, resolutions: { original: { url: "https://example.invalid/banner-main.jpg", width: 1000, height: 200 } } }
+  ]);
+  assert.equal(mainTieBreak.sourceUrl, "https://example.invalid/banner-main.jpg", "main art breaks an aspect-ratio tie");
 
   const missingResolution = selectTvmazeCardArt(show, [
     { type: "background", main: true, resolutions: { medium: { url: "https://example.invalid/bg-medium-ignored.jpg" } } },

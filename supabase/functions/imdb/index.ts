@@ -340,12 +340,23 @@ async function verifyBackgrounds(items: BackgroundAuditItem[]) {
     if (!latest?.card_art_url) {
       continue;
     }
+    const { data: existing } = await serviceClient
+      .from("shows")
+      .select("card_art_source_url, card_art_type, card_art_width, card_art_height")
+      .eq("id", showId)
+      .maybeSingle();
     const width = Number(item.width || 0);
     const height = Number(item.height || 0);
-    const dimensionsMismatch = latest.card_art_width && latest.card_art_height
+    const renderedDimensionsMismatch = latest.card_art_width && latest.card_art_height
       ? width !== latest.card_art_width || height !== latest.card_art_height
       : false;
-    if (!dimensionsMismatch) {
+    const storedSelectionMismatch = existing
+      ? existing.card_art_source_url !== latest.card_art_url
+        || existing.card_art_type !== latest.card_art_type
+        || Number(existing.card_art_width || 0) !== Number(latest.card_art_width || 0)
+        || Number(existing.card_art_height || 0) !== Number(latest.card_art_height || 0)
+      : false;
+    if (!renderedDimensionsMismatch && !storedSelectionMismatch) {
       continue;
     }
 

@@ -31,22 +31,43 @@ function candidateFromImage(item, kind, resolutionOrder) {
   return null;
 }
 
-function selectByType(images, kind, resolutionOrder) {
-  const candidates = (Array.isArray(images) ? images : [])
-    .map((item) => candidateFromImage(item, kind, resolutionOrder))
-    .filter(Boolean);
-  return candidates.find((item) => item.main) || candidates[0] || null;
+// FFF's persistent show cards are deliberately panoramic. A 16:9 backdrop
+// needs heavy side-cropping in that space, while TVmaze banners are commonly
+// much closer. Keep this independent of a particular viewport: it describes
+// the shared card-art asset, not an individual card's transient layout.
+const CARD_ART_TARGET_RATIO = 5;
+
+function aspectDistance(candidate) {
+  if (!candidate?.width || !candidate?.height) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.abs(Math.log((candidate.width / candidate.height) / CARD_ART_TARGET_RATIO));
+}
+
+function selectHorizontalArt(images) {
+  const candidates = [
+    ...((Array.isArray(images) ? images : [])
+      .map((item) => candidateFromImage(item, "background", ["original"]))
+      .filter(Boolean)),
+    ...((Array.isArray(images) ? images : [])
+      .map((item) => candidateFromImage(item, "banner", ["original", "medium"]))
+      .filter(Boolean))
+  ];
+  if (!candidates.length) {
+    return null;
+  }
+  return candidates.sort((left, right) => {
+    const distance = aspectDistance(left) - aspectDistance(right);
+    if (distance) return distance;
+    if (left.main !== right.main) return left.main ? -1 : 1;
+    return right.width * right.height - left.width * left.height;
+  })[0];
 }
 
 export function selectTvmazeCardArt(show, images) {
-  const background = selectByType(images, "background", ["original"]);
-  if (background) {
-    return background;
-  }
-
-  const banner = selectByType(images, "banner", ["original", "medium"]);
-  if (banner) {
-    return banner;
+  const horizontal = selectHorizontalArt(images);
+  if (horizontal) {
+    return horizontal;
   }
 
   const image = show?.image && typeof show.image === "object" ? show.image : {};

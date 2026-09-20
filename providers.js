@@ -91,6 +91,9 @@ export function createMetadataProvider({ config, token, demoMode }) {
     },
     enroll(imdbId) {
       return imdb.enroll(imdbId);
+    },
+    verifyBackgrounds(items) {
+      return imdb.verifyBackgrounds(items);
     }
   };
 }
