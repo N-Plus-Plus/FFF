@@ -183,8 +183,8 @@ function renderNotice() {
   const notices = [];
   if (appState.demoMode) {
     notices.push("Local demo mode is enabled. Data is stored in this browser only.");
-  } else if (!isSupabaseConfigured(APP_CONFIG)) {
-    notices.push("Supabase is not configured.");
+  } else if (!isApiConfigured(APP_CONFIG)) {
+    notices.push("API is not configured.");
   }
   dom.appNotice.hidden = notices.length === 0;
   dom.appNotice.textContent = notices.join(" ");
