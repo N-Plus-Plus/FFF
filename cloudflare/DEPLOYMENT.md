@@ -2,9 +2,15 @@
 
 ## Live production state — 11 October 2026
 
+The banner/card trial is live from release commit `60a18c9`, deployed with `npx.cmd wrangler deploy --keep-vars` as version `f20916b1-20c8-4e37-b3ad-53f0cd5c17e0`. Only `app.js` and `style.css` assets changed; authentication, backend code, resources, secrets, origin/domain and both Cron registrations are preserved. Ranking reminders remain disabled; migration 0007 remains unapplied. No production D1/R2 data operations, sign-ins, email sends or manual Cron executions were performed.
+
+The complete `npm test` suite, four-width `node scripts/artwork-browser-test.mjs`, clean-commit deployment dry-run and privacy scan passed. Management reads before/after verified configuration and the exact deployed Worker bundle; anonymous HTTPS checks verified exact public assets, protected module/session/artwork denial, private/no-store headers and unpublished server source/migrations. Private release evidence is under ignored `.wrangler/preflight/artwork-release/`. The user must trial authenticated card presentation: exact 200:37 cards measure approximately 67px high at a 390px viewport and 126px on desktop, with mobile title truncation, horizontally scrollable metadata and icon-only nomination actions. This ratio reduces mobile vertical space. No different ratio was substituted.
+
+### Historical final cutover record
+
 The authorised final cutover is live at **https://wirewednesday.nissen.nexus**, existing Worker `fff-api`, version `18d48994-4cc0-4a46-ba5e-00e4bb7c47b3` at 100% traffic. Maintenance is inactive. Existing D1 `fff` (Oceania) and R2 `fff-artwork` remain the production resources. Both `workers_dev` and `preview_urls` are false; tested alternate URLs return 404. The canonical custom domain belongs to the expected zone/account, DNS resolves publicly and its trusted HTTPS certificate covers the hostname.
 
-The uploaded Worker bundle exactly matches the Stage 2 secret-aware dry-run bundle. Release source was the clean tracked state at `0a77d8e`; subsequent changes record operations in documentation only. All eight relevant established local checks passed on this release: contracts, session hash, hosting contracts, preapproval, mocked-Google browser flow, fanart, actual Wrangler hosting browser smoke and placement browser smoke. This is historical release evidence. The current repository defines `npm test` and `npm run test:browser`; these checks were not repeated for documentation-only changes. Production deployment used:
+The uploaded Worker bundle exactly matches the Stage 2 secret-aware dry-run bundle. Release source was the clean tracked state at `0a77d8e`; subsequent application releases are recorded above and in the reminder release section. All eight relevant established local checks passed on this release: contracts, session hash, hosting contracts, preapproval, mocked-Google browser flow, fanart, actual Wrangler hosting browser smoke and placement browser smoke. This is historical release evidence. The current repository defines `npm test` and `npm run test:browser`; these checks were not repeated for documentation-only changes. Production deployment used:
 
 ```powershell
 npx.cmd wrangler deploy --config wrangler.jsonc --secrets-file .wrangler/preflight/stage2/production-secrets.json
