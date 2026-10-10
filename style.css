@@ -446,6 +446,31 @@ h2 {
   background: rgb(0 0 0 / 0.4);
 }
 
+.nomination-actions { display: flex; align-items: center; gap: 0.4rem; }
+.artwork-edit { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.artwork-dialog {
+  color: var(--text-primary, #fff);
+  background: var(--surface-base);
+  border: var(--border-width) solid var(--border-primary);
+  border-radius: var(--radius-container);
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 1rem;
+  overflow: auto;
+}
+.artwork-dialog::backdrop { background: rgb(0 0 0 / 0.8); }
+.artwork-dialog__heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.artwork-dialog h2 { margin: 0; font-size: 1.2rem; }
+.artwork-options { display: grid; gap: 0.75rem; }
+.artwork-option { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.5rem; padding: 0.65rem; border: 2px solid var(--border-primary); border-radius: var(--radius-container); cursor: pointer; }
+.artwork-option:has(input:checked) { border-color: var(--emerald); }
+.artwork-option:focus-within { outline: 2px solid var(--jeans); outline-offset: 2px; }
+.artwork-options img { width: 100%; height: auto; display: block; grid-column: 1 / -1; }
+.artwork-option input { width: 1.25rem; height: 1.25rem; }
+.artwork-dialog a { color: inherit; text-decoration: underline; }
+.artwork-credit { font-size: 0.8rem; }
+.card-art-credit { position: absolute; bottom: 0.2rem; left: 0.7rem; z-index: 2; font-size: 0.6rem; color: #fff; text-decoration: underline; }
+
 .show-card,
 .leader-card {
   position: relative;

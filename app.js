@@ -474,6 +474,71 @@ function catalogueCard(show) {
   return card;
 }
 
+async function openArtworkPicker(show, trigger) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "artwork-dialog";
+  dialog.setAttribute("aria-labelledby", "artworkHeading");
+  dialog.innerHTML = `<div class="artwork-dialog__heading"><h2 id="artworkHeading">Artwork for ${escapeHtml(show.title)}</h2><button class="icon-button" type="button" aria-label="Close artwork selector"><i data-lucide="x" aria-hidden="true"></i></button></div>
+    <p class="artwork-status" role="status">Loading banners…</p><div class="artwork-options"></div>
+    <p class="artwork-credit">Banners: <a href="https://fanart.tv/" target="_blank" rel="noopener noreferrer">fanart.tv</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>. Displayed without edits.</p>
+    <div class="button-row"><button class="button button--constructive" type="button" data-save disabled>Save selection</button><button class="button button--neutral" type="button" data-retry hidden>Retry</button></div>`;
+  document.body.append(dialog);
+  const close = dialog.querySelector('[aria-label="Close artwork selector"]');
+  const status = dialog.querySelector(".artwork-status"), options = dialog.querySelector(".artwork-options");
+  const save = dialog.querySelector("[data-save]"), retry = dialog.querySelector("[data-retry]");
+  let chosen = "", saving = false;
+  close.onclick = () => { if (!saving) dialog.close(); };
+  dialog.addEventListener("cancel", (event) => { if (saving) event.preventDefault(); });
+  dialog.addEventListener("close", () => { dialog.remove(); if (trigger.isConnected) trigger.focus(); else document.querySelector(".artwork-edit")?.focus(); });
+  dialog.showModal(); refreshIcons(dialog);
+  const payload = { imdbId: show.imdbId };
+  async function load() {
+    status.textContent = "Loading banners…"; retry.hidden = true; save.disabled = true;
+    options.replaceChildren(); chosen = "";
+    try {
+      const data = await apiRequest("/v1/admin/artwork", payload);
+      if (!dialog.isConnected) return;
+      status.textContent = data.banners.length ? "Choose a banner. Saving applies it to every screen." : "No suitable fanart.tv banners are available. Existing artwork is kept.";
+      if (data.currentUrl && !data.banners.some((b) => b.id === data.selectedId)) {
+        const current = document.createElement("div");
+        current.innerHTML = `<p>Current artwork${data.manual ? " (manually selected)" : ""}</p><img src="${escapeAttribute(data.currentUrl)}" alt="Current artwork for ${escapeAttribute(show.title)}">`;
+        options.append(current);
+      }
+      data.banners.forEach((banner, index) => {
+        const label = document.createElement("label"); label.className = "artwork-option";
+        label.innerHTML = `<input type="radio" name="banner" value="${escapeAttribute(banner.id)}"><span>Banner ${index + 1}${banner.lang ? ` (${escapeHtml(banner.lang)})` : ""}${banner.id === data.selectedId ? " · Currently selected" : ""}</span><img src="${escapeAttribute(banner.url)}" alt="Banner ${index + 1} for ${escapeAttribute(show.title)}" loading="lazy">`;
+        const radio = label.querySelector("input"); radio.checked = banner.id === data.selectedId;
+        if (radio.checked) chosen = banner.id;
+        radio.onchange = () => { chosen = banner.id; save.disabled = false; };
+        label.querySelector("img").onerror = () => { radio.disabled = true; label.classList.add("artwork-option--failed"); label.querySelector("span").textContent += " · Preview unavailable"; if (chosen === banner.id) { chosen = ""; save.disabled = true; } };
+        options.append(label);
+      });
+      save.disabled = !chosen;
+    } catch (error) { if (dialog.isConnected) { status.textContent = error.message; retry.hidden = false; } }
+  }
+  retry.onclick = load;
+  save.onclick = async () => {
+    if (!chosen || saving) return;
+    saving = true; save.disabled = true; close.disabled = true; retry.hidden = true;
+    options.querySelectorAll("input").forEach((input) => { input.disabled = true; });
+    status.textContent = "Saving banner…";
+    let saved = false;
+    try {
+      await apiRequest("/v1/admin/artwork", { ...payload, action: "save", bannerId: chosen }); saved = true;
+      await reloadOrderAndCatalogue();
+      appState.board = await dataStore.getBoard(appState.demoParticipant);
+      render(); dialog.close(); showToast("Artwork saved", "success");
+    } catch (error) {
+      status.textContent = saved ? "Artwork saved. Reload the page to see it; refreshing the screen failed." : error.message;
+      retry.hidden = saved; save.disabled = saved;
+    } finally {
+      saving = false; close.disabled = false;
+      options.querySelectorAll(".artwork-option:not(.artwork-option--failed) input").forEach((input) => { input.disabled = false; });
+    }
+  };
+  await load();
+}
+
 function renderShowActions(container, show, options = {}) {
   container.replaceChildren();
   const known = show.id ? show : findKnownShow(show.imdbId);
@@ -481,6 +546,17 @@ function renderShowActions(container, show, options = {}) {
   if (known?.isAdminRemoved) {
     container.append(disabledButton("Removed", "ban"));
     return;
+  }
+
+  if (appState.currentUser?.isAdmin && !appState.demoMode) {
+    const edit = document.createElement("button");
+    edit.className = "icon-button artwork-edit";
+    edit.type = "button";
+    edit.setAttribute("aria-label", `Edit artwork for ${show.title}`);
+    edit.title = "Edit artwork";
+    edit.innerHTML = '<i data-lucide="edit" aria-hidden="true"></i>';
+    edit.addEventListener("click", () => openArtworkPicker(known || show, edit));
+    container.append(edit);
   }
 
   if (known?.currentUserNominated) {
@@ -492,6 +568,10 @@ function renderShowActions(container, show, options = {}) {
   if (known?.id && appState.currentUser?.isAdmin) {
     container.append(actionButton("Remove", "button--destructive", () => removeShow(known.id), "trash-2"));
   }
+  const primary = document.createElement("div");
+  primary.className = "nomination-actions";
+  Array.from(container.children).slice(0, appState.currentUser?.isAdmin && !appState.demoMode ? 2 : 1).forEach((button) => primary.append(button));
+  container.prepend(primary);
   refreshIcons(container);
 }
 
@@ -1395,7 +1475,7 @@ function backgroundMarkup(show) {
   if (url) {
     const showId = show.id || show.showId || show.show_id || "";
     const imdbId = show.imdbId || show.imdb_id || "";
-    return `<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false" data-bg-show-id="${escapeAttribute(showId)}" data-bg-imdb-id="${escapeAttribute(imdbId)}"></div>`;
+    return `${show.cardArtType === "fanart-tvbanner" || show.card_art_type === "fanart-tvbanner" ? '<a class="card-art-credit" href="https://fanart.tv/" target="_blank" rel="noopener noreferrer" aria-label="Banner artwork from fanart.tv, CC BY 3.0; cropped for display">fanart.tv</a>' : ""}<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false" data-bg-show-id="${escapeAttribute(showId)}" data-bg-imdb-id="${escapeAttribute(imdbId)}"></div>`;
   }
   return '<div class="card-background">TV</div>';
 }
