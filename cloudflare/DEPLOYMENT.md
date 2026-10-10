@@ -1,5 +1,9 @@
 # Wire Wednesday deployment and access runbook
 
+## Current cutover state
+
+Stage 1 deployed maintenance version `ee134c6d-e41d-40e6-a268-a99efaee6914` to existing `fff-api` on 11 October 2026 (Australia/Sydney). Live endpoint checks verified 503 closure, previews disabled, no data/assets bindings and deployed empty Cron handling. No production data migrations or writes were performed. Stage 1 stopped at backup verification: the SQL export restores successfully and passes integrity/count checks, but six `shows.metadata` values differ from the frozen live rows. The export is not a verified recovery backup. R2 inventory was recorded; object backup was not completed because of the stop condition. Stage 2 is NO-GO. Keep maintenance active; do not restore the legacy Worker. Private recovery/status evidence is in `.wrangler/preflight/stage1/`.
+
 ## Prepared topology and boundaries
 
 Existing `fff-api` serves the canonical HTTPS origin `https://wirewednesday.nissen.nexus`: Static Assets via `ASSETS`, `/auth/*` and `/v1/*` via existing D1 `fff`, and authenticated `/artwork/*` via existing R2 `fff-artwork`. Both production bindings are confirmed by the operator. No replacement resources or imports are required. Prepared config explicitly disables workers.dev, version preview URLs and cross-origin API access. GitHub Pages is not a fallback after cutover.
@@ -169,8 +173,8 @@ Supabase is retired legacy infrastructure. The operator explicitly excludes its 
    npx.cmd wrangler deploy --config .wrangler/preflight/maintenance.jsonc
    ```
 
-   This is a production deployment requiring approval. It retains the existing workers.dev address temporarily but makes every request return 503, disables previews and makes scheduled handling a no-op. It intentionally has no D1/R2/assets bindings. Verify the old origin serves only maintenance and preview access is disabled. Do not continue if alternate writers to the canonical D1/R2 resources remain active; retired Supabase is outside this cutover scope. The maintenance artifact passed a separate local dry-run; it was not deployed.
-3. With writes stopped, create a private recovery point and full D1 export. The planned `private-cutover-bookmark.json` and `private-cutover-backup.sql` do not yet exist; historical exports and the preflight snapshot are not a verified frozen cutover backup. Stop before migrations unless backup completion, checksums and recovery usability are confirmed privately:
+   This is a production deployment requiring approval. It retains the existing workers.dev address temporarily but makes every request return 503, disables previews and makes scheduled handling a no-op. It intentionally has no D1/R2/assets bindings. Verify the old origin serves only maintenance and preview access is disabled. Do not continue if alternate writers to the canonical D1/R2 resources remain active; retired Supabase is outside this cutover scope. The maintenance artifact passed a local dry-run and was deployed in Stage 1; see current cutover state above.
+3. With writes stopped, create a private recovery point and full D1 export. `private-cutover-bookmark.json` and `private-cutover-backup.sql` were created in Stage 1, but the SQL export failed row-equivalence recovery verification; historical exports and preflight snapshots are also not verified frozen cutover backups. Stop before migrations unless backup completion, checksums and recovery usability are confirmed privately:
 
    ```powershell
    npx.cmd wrangler d1 time-travel info DB --json > cloudflare/private-cutover-bookmark.json
