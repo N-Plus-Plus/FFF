@@ -30,13 +30,13 @@ The project is an established static web app with a Cloudflare backend and a pre
 | Project name | Wire Wednesday (internal repository/resources remain FFF) |
 | Product purpose | Mobile-first shared TV show catalogue, private personal ordering, and strict aggregate Board sequence |
 | Intended users | Existing known participants pre-approved in D1, then bound to verified Google subjects; no registration |
-| Project maturity | Established static app with Cloudflare backend; Supabase retained as historical/rollback infrastructure |
+| Project maturity | Established static app with Cloudflare backend; Supabase retired legacy infrastructure |
 | Application shape | Static HTML/CSS/JavaScript ES modules; prepared for existing Cloudflare Worker Static Assets |
 | Languages and runtime | Browser JavaScript, HTML, CSS; no build step |
 | Frameworks and major libraries | Raw browser JS; Worker `jose` 6.2.12 verifies Google credentials; pinned Lucide 1.55.0 and Lexend Deca 5.3.0 packaged locally; Playwright/Wrangler development tools |
 | Package manager | npm, for development-only tooling |
-| Persistence or database | Cloudflare D1 (`fff`, Oceania) is the frontend target through Worker `fff-api`; Supabase Postgres remains intact as rollback and historical source. Opt-in localStorage demo with `?demo=1` |
-| External services | Cloudflare Workers, D1, R2, and Cron Trigger; TVmaze primary television metadata, fanart.tv preferred banners; Supabase remains rollback/historical infrastructure |
+| Persistence or database | Cloudflare D1 (`fff`, Oceania) is the frontend target through Worker `fff-api`; Supabase Postgres is retired legacy infrastructure; removal is a separate task, not a cutover blocker. Opt-in localStorage demo with `?demo=1` |
+| External services | Cloudflare Workers, D1, R2, and Cron Trigger; TVmaze primary television metadata, fanart.tv preferred banners; Supabase is retired legacy infrastructure |
 | Deployment target | Cloudflare `fff-api` at `wirewednesday.nissen.nexus` prepared locally; GitHub Pages remains live pending approved cutover |
 | Source-control policy | Git worktree on `main` with `origin` at `https://github.com/N-Plus-Plus/FFF.git`; preserve unrelated user changes and do not push, commit, or rewrite history unless explicitly requested |
 | Test framework | Targeted Playwright placement smoke check in `scripts/placement-browser-test.mjs` |
@@ -343,9 +343,9 @@ Do not leave obsolete commands in this table after scripts are renamed or retire
 
 Current decisions:
 
-- Canonical future hosting is existing `fff-api` with Static Assets at `https://wirewednesday.nissen.nexus`. Prepared cutover disables workers.dev and cross-origin API use; GitHub Pages can retire during the approved cutover. Package only allowlisted frontend files.
+- Canonical future hosting is existing `fff-api` with Static Assets at `https://wirewednesday.nissen.nexus`. Prepared cutover explicitly disables workers.dev, version preview URLs and cross-origin API use; GitHub Pages can retire during the approved cutover. Package only allowlisted frontend files.
 - `bootstrap.js` appends per-page-load cache-busting queries to CSS and app modules. No inline scripts or document.write; production app CSP allows only local scripts.
-- The frontend uses same-origin session-authenticated Worker endpoints and receives no direct D1 access. Supabase remains historical infrastructure and must not be modified during local preparation.
+- The frontend uses same-origin session-authenticated Worker endpoints and receives no direct D1 access. Supabase is retired legacy infrastructure. Do not inspect or modify it during cutover; later removal is a separate task and not a cutover blocker.
 - The deployed Cloudflare resources are Worker `fff-api`, D1 `fff` in Oceania, and R2 `fff-artwork`. Once live writes reach D1, rollback to Supabase is not lossless without export/reconciliation.
 - Cloudflare import/export must not depend on Docker. Use the authenticated Supabase Management API through `npx.cmd supabase db query --linked` for explicit, read-only FFF table projections; private exports and generated D1 import SQL stay ignored under `cloudflare/private-*`.
 - Historical import tooling serialises PostgreSQL booleans as SQLite integers (`0`/`1`); no import is part of hosting/auth cutover. Historical link columns remain inert and are never used by the prepared runtime.
@@ -371,8 +371,8 @@ Current decisions:
 - Board refresh uses session-authenticated revision polling when the Board is open, on focus/visibility return, and through a one-minute fallback interval; do not introduce Realtime infrastructure.
 - fanart.tv API v3.2 is preferred for native 1000×185 `tvbanner` artwork, using TVmaze’s TheTVDB cross-reference or retained `tvdb_record_id`. Select the first suitable banner automatically; keep existing artwork when unavailable. `FANART_TV` is server-only in ignored `.env.vars` locally and a separate production Worker secret. Discovery/empty responses cache in D1 for 24 hours; failures back off for at least five minutes with bounded Retry-After. Admin-only `/v1/admin/artwork` chooses canonical banners without modifying existing metadata, nominations or rankings; choosing an unenrolled search result creates an inactive canonical row only. `0005_fanart_banners.sql` persists a manual flag and banner ID. Manual choices survive all refresh/nomination paths. Originals/previews use authenticated R2 and immutable source-derived keys; source and CC BY 3.0 attribution identify display cropping. No new dependency or browser provider access.
 - Enrolled posters and selected card artwork are retained in the `fff-artwork` R2 bucket under deterministic `posters/` and `card-art/` paths. Browser reads are served by the Worker; browser uploads are not permitted.
-- Weekly metadata refresh is configured for `02:00 UTC` Wednesday. The live trigger is not currently visible/unconfirmed; deployment may register it and enable scheduled D1/R2 writes, which needs explicit approval. It processes active non-removed due shows through TVmaze and records sanitized failures; it does not send email reminders.
-- Historical weekly order reminders remain in Supabase source. Their participant-link content is obsolete; cutover must retire or replace those links and audit any still-reachable historical bearer APIs, with separate approval for live Supabase operations.
+- Weekly metadata refresh is configured for `02:00 UTC` Wednesday. Live registration `0 2 * * 3` was confirmed in the 11 October 2026 read-only preflight. Registration does not prove successful executions. Cutover retains the schedule but changes scheduled D1/R2 behavior, which needs explicit approval; the prepared maintenance Worker retains the trigger with a no-op handler. It processes active non-removed due shows through TVmaze and records sanitized failures; it does not send email reminders.
+- Historical weekly order reminders and bearer APIs remain in retired Supabase source. Their later removal requires a separate task; do not inspect or modify Supabase during this cutover, and do not treat that removal as a launch blocker.
 - D1 access is exclusively through Worker authorization; it has no Postgres RLS. Historical Supabase tables retain RLS/grant/search_path protections and must not be reopened as a runtime fallback.
 
 Add only decisions that materially guide future work. Examples include:
