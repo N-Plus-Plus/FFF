@@ -114,7 +114,8 @@ export async function saveBanner(user, input, env) {
   await retain(banner,resolved.id,env);
   const show = resolved.show || await ensureArtworkShow(user,resolved.fresh,env);
   await select(show,banner,resolved.id,true,env);
-  return { saved: true };
+  const selected = await env.DB.prepare("SELECT card_art_storage_path FROM shows WHERE id=?").bind(show.id).first();
+  return { saved: true, artwork: { card_art_url: `/artwork/${selected.card_art_storage_path}`, card_art_type: "fanart-tvbanner" } };
 }
 export async function bannerPreview(url, env) {
   let match = url.pathname.match(/^\/artwork\/fanart\/([1-9]\d{0,11})\/([1-9]\d{0,11})$/);

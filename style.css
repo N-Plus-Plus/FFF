@@ -470,6 +470,7 @@ h2 {
 .artwork-dialog a { color: inherit; text-decoration: underline; }
 .artwork-credit { font-size: 0.8rem; }
 .card-art-credit { position: absolute; bottom: 0.2rem; left: 0.7rem; z-index: 2; font-size: 0.6rem; color: #fff; text-decoration: underline; }
+.card-art-credit a { color: inherit; }
 
 .show-card,
 .leader-card {

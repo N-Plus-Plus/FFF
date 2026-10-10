@@ -102,6 +102,9 @@ try {
   const rateCalls=calls;await assert.rejects(()=>banners("123",env),/unavailable/);assert.equal(calls,rateCalls);
   assert((await env.DB.prepare("SELECT expires_at FROM fanart_cache").first()).expires_at>Date.now()+590000,"Retry-After respected");
   mode="ok";choices=[image(2),image(3)];await env.DB.prepare("DELETE FROM fanart_cache").run();
+  const auditItems=[{showId:fallback.id,imdbId:"tt90000002"}];
+  assert.equal((await (await api("/v1/metadata",admin,{action:"verify-backgrounds",items:auditItems})).json()).updatedCount,1,"Existing fallback adopts preferred artwork");
+  assert.equal((await (await api("/v1/metadata",admin,{action:"verify-backgrounds",items:auditItems})).json()).updatedCount,0,"Unchanged banners do not cause a refresh/render loop");
   // Search-result artwork may create a canonical row, but never a nomination/ranking.
   const nBefore=(await env.DB.prepare("SELECT count(*) n FROM show_nominations").first()).n;
   assert.equal((await api("/v1/admin/artwork",admin,{action:"save",imdbId:"tt90000003",bannerId:"3"})).status,200);
@@ -118,7 +121,7 @@ try {
   await edit.click();const dialog=page.getByRole("dialog");await dialog.getByText(/Currently selected/).waitFor();
   assert.equal(await dialog.getByRole("radio",{checked:true}).inputValue(),"3");
   for(const width of [320,390,768,1440]) {
-    await page.setViewportSize({width,height:900});if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)) console.log("Overflow",width,await page.evaluate(()=>Array.from(document.querySelectorAll("body *")).filter(e=>e.getBoundingClientRect().right>innerWidth).map(e=>[e.tagName,e.className,e.getBoundingClientRect().right])));assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.setViewportSize({width,height:900});
     const box=await dialog.boundingBox();assert(box.x>=0&&box.x+box.width<=width);
   }
   await dialog.getByRole("radio").first().check();await dialog.getByRole("button",{name:"Save selection"}).click();await dialog.waitFor({state:"detached"});
@@ -133,9 +136,16 @@ try {
   await edit.click();await dialog.getByText("Mock artwork unavailable").waitFor();assert(await dialog.getByRole("button",{name:"Retry"}).isVisible());await page.keyboard.press("Escape");await page.unroute("**/v1/admin/artwork");
   await page.route("**/v1/admin/artwork",route=>route.request().postDataJSON().action==="save"?route.fulfill({status:503,json:{message:"Mock save failed"}}):route.continue());
   await edit.click();await dialog.getByRole("radio").last().check();await dialog.getByRole("button",{name:"Save selection"}).click();await dialog.getByText("Mock save failed").waitFor();assert(await dialog.getByRole("button",{name:"Save selection"}).isEnabled());await page.keyboard.press("Escape");
+  await page.unroute("**/v1/admin/artwork");
+  const nominationsBeforeSearch=(await env.DB.prepare("SELECT count(*) n FROM show_nominations").first()).n;
+  await page.locator('#titleInput').fill('tt90000004');await page.getByRole('button',{name:'Search',exact:true}).click();
+  await page.locator('#searchResults').getByRole('button',{name:'Edit artwork for Synthetic show'}).click();
+  await dialog.getByRole('radio').last().check();await dialog.getByRole('button',{name:'Save selection'}).click();await dialog.waitFor({state:'detached'});
+  assert((await page.locator('#searchResults .card-background img').getAttribute('src')).startsWith('/artwork/card-art/fanart/'));
+  assert.equal((await env.DB.prepare("SELECT count(*) n FROM show_nominations").first()).n,nominationsBeforeSearch,'Search-result save does not nominate');
   assert.deepEqual(errors,[]);
   await context.close();
-  const ordinary=await browser.newContext();await ordinary.addCookies([{name:"ww-local-session",value:member.split("=")[1],url:origin,httpOnly:true,sameSite:"Lax"}]);const memberPage=await ordinary.newPage();await memberPage.goto(origin);await memberPage.locator('#catalogueList .result-card').first().waitFor();assert.equal(await memberPage.locator('.artwork-edit').count(),0);await ordinary.close();
+  const ordinary=await browser.newContext();await ordinary.route("**/*",route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());await ordinary.addCookies([{name:"ww-local-session",value:member.split("=")[1],url:origin,httpOnly:true,sameSite:"Lax"}]);const memberPage=await ordinary.newPage();await memberPage.goto(origin);await memberPage.locator('#catalogueList .result-card').first().waitFor();assert.equal(await memberPage.locator('.artwork-edit').count(),0);await memberPage.getByRole('tab',{name:/^Rank/}).click();assert((await memberPage.locator('#rankChoices .card-background img').first().getAttribute('src')).includes(selected.card_art_storage_path));await ordinary.close();
   console.log("Artwork picker mobile/desktop, current selection, Save, canonical screens, keyboard focus, loading/empty/errors and admin-only UI passed.");
 } finally {
   if(browser) await browser.close();await new Promise(resolve=>server.close(resolve));if(test) await test.dispose();

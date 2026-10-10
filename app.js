@@ -433,9 +433,11 @@ function renderSearchResults() {
     const known = findKnownShow(show.imdbId);
     const status = known ? showStatusText(known) : "Not nominated by you";
     const card = document.createElement("article");
-    card.className = "result-card";
+    const artworkShow = known || show;
+    const hasBanner = artworkShow.cardArtType === "fanart-tvbanner";
+    card.className = hasBanner ? "result-card result-card--catalogue" : "result-card";
     card.innerHTML = `
-      ${posterMarkup(show)}
+      ${hasBanner ? backgroundMarkup(artworkShow) : posterMarkup(show)}
       <div class="show-meta">
         ${titleMarkup(show)}
         ${metadataMarkup(show)}
@@ -524,7 +526,8 @@ async function openArtworkPicker(show, trigger) {
     status.textContent = "Saving banner…";
     let saved = false;
     try {
-      await apiRequest("/v1/admin/artwork", { ...payload, action: "save", bannerId: chosen }); saved = true;
+      const result = await apiRequest("/v1/admin/artwork", { ...payload, action: "save", bannerId: chosen }); saved = true;
+      appState.searchResults = appState.searchResults.map((item) => normalizeProviderTitle(item).imdbId === show.imdbId ? { ...item, ...result.artwork } : item);
       await reloadOrderAndCatalogue();
       appState.board = await dataStore.getBoard(appState.demoParticipant);
       render(); dialog.close(); showToast("Artwork saved", "success");
@@ -1475,7 +1478,7 @@ function backgroundMarkup(show) {
   if (url) {
     const showId = show.id || show.showId || show.show_id || "";
     const imdbId = show.imdbId || show.imdb_id || "";
-    return `${show.cardArtType === "fanart-tvbanner" || show.card_art_type === "fanart-tvbanner" ? '<a class="card-art-credit" href="https://fanart.tv/" target="_blank" rel="noopener noreferrer" aria-label="Banner artwork from fanart.tv, CC BY 3.0; cropped for display">fanart.tv</a>' : ""}<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false" data-bg-show-id="${escapeAttribute(showId)}" data-bg-imdb-id="${escapeAttribute(imdbId)}"></div>`;
+    return `${show.cardArtType === "fanart-tvbanner" || show.card_art_type === "fanart-tvbanner" ? '<span class="card-art-credit"><a href="https://fanart.tv/" target="_blank" rel="noopener noreferrer">fanart.tv</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer" aria-label="CC BY 3.0 banner artwork license; cropped for display">CC BY 3.0</a></span>' : ""}<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false" data-bg-show-id="${escapeAttribute(showId)}" data-bg-imdb-id="${escapeAttribute(imdbId)}"></div>`;
   }
   return '<div class="card-background">TV</div>';
 }
