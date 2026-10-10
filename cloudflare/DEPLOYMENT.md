@@ -1,41 +1,47 @@
 # Wire Wednesday deployment and access runbook
 
-## Current cutover state
+## Live production state — 11 October 2026
 
-Stage 1 maintenance remains at version `ee134c6d-e41d-40e6-a268-a99efaee6914`; no redeployment occurred during recovery verification. D1 recovery is independently verified: explicit UTF-8 reads give exact schema/every-row/metadata-byte/sequence equivalence, SQLite integrity OK, no foreign-key violations and unchanged migrations 0001–0003. Six apparent summary differences were a verification defect: Windows CP1252 decoding of UTF-8 JSON, not production corruption, export serialization or SQLite import. Always specify UTF-8 when reading/writing evidence and SQL; require exact comparison, not normalized text or accepted unexplained differences.
+The authorised final cutover is live at **https://wirewednesday.nissen.nexus**, existing Worker `fff-api`, version `18d48994-4cc0-4a46-ba5e-00e4bb7c47b3` at 100% traffic. Maintenance is inactive. Existing D1 `fff` (Oceania) and R2 `fff-artwork` remain the production resources. Both `workers_dev` and `preview_urls` are false; tested alternate URLs return 404. The canonical custom domain belongs to the expected zone/account, DNS resolves publicly and its trusted HTTPS certificate covers the hostname.
 
-Verified recovery artifacts remain ignored/private:
-
-- D1: `cloudflare/private-cutover-backup.sql` (SHA-256 `103098f07f2495fdd416bcafcc5c121b62670d250ae2e2d9ba211e6324b057c8`), original `private-cutover-bookmark.json` unchanged.
-- R2: `.wrangler/preflight/stage1/r2-recovery.zip` (SHA-256 `7e46b3773eb5ce6ab31ce09c97ac0a50ec5a34e9861ddf8e39e9fdd052d58063`); all 48 objects / 23,744,684 bytes, exact keys, original HTTP/custom metadata, storage class and historical timestamps retained in the manifest. Independent MD5/remote-ETag, SHA-256, ZIP CRC and offline key/metadata reconstruction checks passed. All 48 D1-referenced artwork objects are covered. A later real restore creates new upload timestamps; original times remain evidence. No production restore was performed.
-
-Fresh read-only checks confirm D1 rows and R2 inventory unchanged across the recovery window, same maintenance deployment/empty Cron/no bindings/previews disabled, and original export/bookmark/four approval artifacts unchanged. Prior failure evidence is retained alongside new verification reports under `.wrangler/preflight/stage1/`. Production-only maintenance is not a data backup; retain both recovery artifacts privately. Current artifacts reside on this workstation; an approved off-device encrypted copy is still advisable.
-
-Stage 1 recovery gates pass. Stage 2 migrations/preapprovals are complete; final deployment remains NO-GO until privileged DNS/certificate/cache/logging inspection and Google/provider configuration gates pass. No migrations, approvals, secrets, final application deployment, DNS changes or Supabase access occurred during recovery verification.
-
-## Stage 2 complete — final deployment withheld
-
-Production D1 migrations 0004, 0005 and 0006 were applied sequentially using isolated one-migration Wrangler configs. Each live schema exactly matched an independent local application of the reviewed SQL; migration ledger, existing participant IDs/admin rights, original show fields, nominations, rankings and revisions were verified after every step. The reviewed single four-row preapproval INSERT was applied and independently matched to the private account/participant artifact. Exactly four enabled allowances exist, all unclaimed; subject mappings/sessions/auth flows/requests are empty. Live foreign-key check is clean. All 48 R2 object records remain unchanged. The maintenance version and empty scheduled handler remain active; no application credentials were uploaded.
-
-Original D1/R2 backups plus recovery bookmark were copied to the operator-approved OneDrive location. Original SHA-256 hashes match and Windows Cloud Files API reports all three files in sync. This is sync-provider evidence, not a separate cloud download/hash test. Original local evidence is untouched. A new private post-Stage-2 SQL export, `.wrangler/preflight/stage2/post-stage2-d1.sql`, also passed an independent exact row/schema SQLite restore, integrity and foreign-key checks; retain the original pre-migration backup separately.
-
-All eight relevant established local tests passed: contracts, session hash, hosting/auth contracts, preapproval cases, mocked-Google browser flow, fanart/provider/UI checks, actual Wrangler hosting browser smoke and placement browser smoke. Synthetic local data only. Secret-aware production deployment dry-run passed on the reviewed release; code/assets fingerprint and private-value scans are retained in ignored Stage 2 evidence. Optional anonymous public-SDK appearance review was not repeated; real Google/provider production interaction remains post-attachment acceptance.
-
-Operator confirmed exact Google JavaScript origin `https://wirewednesday.nissen.nexus`, all four Test Users and intended fanart project key. HTTPS readiness and cache checks are accepted as already confirmed; do not repeat broad inspection. Active zone ownership matches the expected account; the target has no existing Worker custom-domain association. Exact DNS-record inspection still returns permission denial: require a privileged dashboard/API check for target/wildcard/CAA conflicts before attachment. Account/zone logging privacy remains a gate unless separately confirmed; Worker observability is disabled.
-
-The final deployment command, **only after explicit final approval and remaining pre-attachment gates**, is:
+The uploaded Worker bundle exactly matches the Stage 2 secret-aware dry-run bundle. Release source was the clean tracked state at `0a77d8e`; subsequent changes record operations in documentation only. All eight relevant established local checks passed on this release: contracts, session hash, hosting contracts, preapproval, mocked-Google browser flow, fanart, actual Wrangler hosting browser smoke and placement browser smoke. A formal full-suite command is not established; these checks were not repeated for documentation-only changes. Production deployment used:
 
 ```powershell
 npx.cmd wrangler deploy --config wrangler.jsonc --secrets-file .wrangler/preflight/stage2/production-secrets.json
 ```
 
-The ignored JSON contains only `GOOGLE_CLIENT_ID` and `FANART_TV`. Never print it, copy it to assets/off-device recovery packages, or upload the unused Google client secret. Upload both settings with the same version as the final reviewed application. Do not run `wrangler secret put`/legacy secret helpers while maintenance must remain active; they immediately deploy. The command also binds existing DB/R2/assets, disables workers.dev/previews, creates the custom-domain/DNS/certificate association and replaces the no-op Cron handler with scheduled metadata writes. Those effects require final approval. Stop on DNS conflicts, code/config fingerprint drift or any failure; retain/restore reviewed maintenance, preserve additive schema/data, never revive bearer authentication.
+Only `GOOGLE_CLIENT_ID` and `FANART_TV` were uploaded with this version. The ignored secrets file and unused local Google client secret remain private; no `secret put` or intermediate application-secret deployment occurred. Operator-confirmed Google origin/Test Users/fanart configuration and manual Cloudflare DNS, existing-domain HTTPS, absent Cache Rules/Cache Response Rules and inactive/unsubscribed Logpush inspection gates are accepted. Unavailable inspection API permissions are not remaining blockers; no Logpush subscription was requested. Worker Logpush is off, tail consumers are empty and the reviewed configuration disables observability ingestion.
 
-Only after attachment can live acceptance verify actual hostname certificate/HTTPS serving, Google popup/origin behavior, four real first-use subject claims, expected identities/admin/retained ballots, remembered/short sessions/logout, authenticated modules/artwork and no-store responses, alternate URL closure, old-link rejection and final scheduled settings. Do not manually fire production Cron. Use maintenance-domain config if closure is required after attachment. First-login claims/session creation and authenticated metadata audits can write D1/R2 and must be included in the final acceptance approval.
+### Completed live acceptance
 
-## Prepared topology and boundaries
+- Public DNS, expected domain ownership and trusted hostname certificate passed. Anonymous `/`, `/index.html`, demo and historical-link queries serve only sign-in content. The anonymous browser strips historical query parameters and renders Google's real official button at 320, 390 and 1440px without layout overflow or script errors.
+- Private modules, APIs and artwork reject anonymous/invalid-session access. Legacy bearer requests cannot authenticate. Cross-origin sign-in is rejected; malformed credentials cannot claim identities. Environment files, private approvals/configuration and unknown paths return 404. Public and denial responses enforce private/no-store, no-referrer, nosniff, HSTS, frame restrictions and appropriate login CSP/COOP without permissive CORS.
+- Complete D1 schema and rows matched the Stage 2 baseline before browser acceptance. A follow-up confirmed all participant/data/approval/migration tables still match exactly: four participants, one administrator, 33 shows, 41 nomination rows, 117 ranking rows, four enabled unclaimed preapprovals and migrations 0001–0006. Integrity and foreign-key checks passed. No Google subjects or sessions were fabricated or created. Anonymous login creates short-lived `auth_flows`; this expected runtime state is separate from preserved participant data. The browser test's challenge was consumed through a rejected malformed-credential request.
+- All 48 R2 objects / 23,744,684 bytes retain exact keys, original metadata and SHA-256 content hashes. Managed r2.dev access is disabled and no public bucket custom domains exist. No production artwork writes or restore were performed by acceptance.
+- Live Cron registration is `0 2 * * 3`, with the final metadata handler active. It was not manually executed. The next Wednesday is 14 October 2026 at 02:00 UTC / 13:00 AEDT; observe the execution privately before claiming scheduled execution success.
 
-Existing `fff-api` serves the canonical HTTPS origin `https://wirewednesday.nissen.nexus`: Static Assets via `ASSETS`, `/auth/*` and `/v1/*` via existing D1 `fff`, and authenticated `/artwork/*` via existing R2 `fff-artwork`. Both production bindings are confirmed by the operator. No replacement resources or imports are required. Prepared config explicitly disables workers.dev, version preview URLs and cross-origin API access. GitHub Pages is not a fallback after cutover.
+Private final evidence is under ignored `.wrangler/preflight/final/`; release fingerprints and earlier test/recovery evidence remain preserved. No nominations or rankings were modified by acceptance. Supabase was not accessed.
+
+### Remaining manual acceptance and follow-up
+
+Each of the four people must sign in themselves using the confirmed Google account and verify their existing identity, administrator role where applicable, retained personal nominations/rankings, authenticated application modules/artwork, remembered/browser sessions and logout across tabs. Verify first-use allowance consumption and subject mappings privately after those sign-ins; do not fabricate claims. Live authenticated delivery, Google popup completion and provider refresh behaviour cannot be certified by anonymous tests. Authenticated metadata audits can legitimately update metadata/artwork; avoid nomination/ranking edits during acceptance. Unknown-account rejection remains covered by local signed-identity tests; a real unapproved-account attempt would create an operator request and is not necessary here.
+
+GitHub Pages retirement remains a follow-up; no Pages setting was changed. Supabase removal remains a separate task and is not a cutover blocker. Until all four people bind their subjects, Board confirmation counts only active participants with enabled subject mappings; all retained ballots remain present.
+
+### Preserved recovery evidence
+
+Stage 1 used maintenance version `ee134c6d-e41d-40e6-a268-a99efaee6914` with no data/assets bindings and no-op scheduled handling. D1 recovery was independently verified with exact schema/every-row/UTF-8 metadata-byte/sequence equivalence, SQLite integrity OK, clean foreign keys and migrations 0001–0003. Six apparent summary differences came from Windows CP1252 decoding of UTF-8 verification JSON; production/export/import were correct. Always specify UTF-8 and reject unexplained differences.
+
+- Original D1: `cloudflare/private-cutover-backup.sql`, SHA-256 `103098f07f2495fdd416bcafcc5c121b62670d250ae2e2d9ba211e6324b057c8`; original recovery bookmark unchanged.
+- R2: `.wrangler/preflight/stage1/r2-recovery.zip`, SHA-256 `7e46b3773eb5ce6ab31ce09c97ac0a50ec5a34e9861ddf8e39e9fdd052d58063`. All keys/bytes/HTTP and custom metadata/storage class are retained; MD5/remote-ETag, SHA-256, ZIP CRC and offline reconstruction passed. A real restore creates new upload timestamps; originals remain historical evidence.
+- Original backups/bookmark have checksum-matching copies in approved OneDrive storage. Windows Cloud Files API confirmed in-sync status; this is sync-provider evidence, not an independent cloud re-download test. No secrets were copied into recovery packages.
+- Post-Stage-2 `.wrangler/preflight/stage2/post-stage2-d1.sql` independently restores exact schema/rows, integrity and foreign keys, including the three additive migrations and four approvals. Preserve the original pre-migration recovery set separately. Do not replay either snapshot over newer production writes.
+
+Stage 2 applied migrations 0004–0006 sequentially with isolated one-migration configs, comparing schema/ledger/protected rows after each. The reviewed four-row INSERT was independently checked against private mappings. Earlier evidence and private artifacts remain ignored and unchanged.
+
+## Production topology and boundaries
+
+Existing `fff-api` serves the canonical HTTPS origin `https://wirewednesday.nissen.nexus`: Static Assets via `ASSETS`, `/auth/*` and `/v1/*` via existing D1 `fff`, and authenticated `/artwork/*` via existing R2 `fff-artwork`. Both production bindings are confirmed by the operator. No replacement resources or imports are required. Production config explicitly disables workers.dev, version preview URLs and cross-origin API access. GitHub Pages is not a fallback after cutover.
 
 Google completely replaces participant links. Migration `0004_google_auth.sql` only adds mapping, request, challenge and session tables plus invalidation triggers; it does not change participant IDs, nominations, rankings or history. Historical link columns remain inert and are never read for authentication or confirmation. Retained Supabase source is historical, not a second login route. Cloudflare D1 migrations own the current backend; never run resets or replay import SQL.
 
@@ -53,7 +59,7 @@ npx.cmd wrangler dev --local --local-upstream 127.0.0.1:3000 --env-file .env.var
 
 Use the exact `127.0.0.1` origin above. `LOCAL_DEMO` works only on the explicitly configured loopback origin, never production. Real local sign-in additionally needs synthetic local mappings; automated tests mock Google and use disposable data. Do not use `--remote`, production snapshots, or real participant records in tests. Local HTTP uses a separately named cookie; production always uses `__Host-ww-session` with Secure, HttpOnly, Path=/, no Domain and SameSite=Lax.
 
-Production Wrangler secrets are separate from local files. During this maintenance cutover, stage only the two required settings in the ignored Stage 2 JSON and upload them with the final reviewed application using `wrangler deploy --secrets-file`, after final approval. Legacy `set-google-client-id.mjs` uses `secret put`, which immediately deploys and must not be used while preserving maintenance. Do not pass `.env.vars` to production deployment, and do not upload its unused client secret. Confirm secret names rather than values. The public `/auth/config` deliberately returns the client ID needed by GIS, never credentials or mappings.
+Production Wrangler secrets are separate from local files. For approved deployments, include only the two required settings in the ignored Stage 2 JSON and upload them with the reviewed application using `wrangler deploy --secrets-file`. The final cutover installed both together. Legacy `set-google-client-id.mjs` uses `secret put`, which immediately deploys and must not be used while preserving maintenance. Do not pass `.env.vars` to production deployment, and do not upload its unused client secret. Confirm secret names rather than values. The public `/auth/config` deliberately returns the client ID needed by GIS, never credentials or mappings.
 
 ## fanart.tv banner deployment
 
@@ -61,7 +67,7 @@ Local `.env.vars` must contain `FANART_TV`, a fanart.tv project API key. The loc
 
 Migration `0005_fanart_banners.sql` adds `shows.card_art_manual`, `shows.fanart_banner_id` and the `fanart_cache` table. It changes no existing nominations, ranking positions or participant records. Apply all pending forward migrations locally for development. Tests apply them to disposable D1/R2 and mock providers; run `node cloudflare/tests/fanart.test.mjs` after asset preparation.
 
-For this production cutover, migrations are already applied. Stage `FANART_TV` alongside `GOOGLE_CLIENT_ID` in the ignored Stage 2 JSON and upload both with the final reviewed Worker/assets after final approval. Do not use `set-fanart-key.mjs`, `wrangler secret put` or dashboard secret deployment while maintenance must remain active. Do not pass the environment file to production deployment. Existing Google, origin, D1, R2 and Cron deployment gates still apply. Confirm production secret names without printing values.
+For this production cutover, migrations are already applied. `FANART_TV` and `GOOGLE_CLIENT_ID` were installed together with the final reviewed Worker/assets from the ignored Stage 2 JSON. Do not use `set-fanart-key.mjs`, `wrangler secret put` or dashboard secret deployment while maintenance must remain active. Do not pass the environment file to production deployment. Existing Google, origin, D1, R2 and Cron deployment gates still apply. Confirm production secret names without printing values.
 
 Existing shows adopt preferred banners through the existing authenticated background audit or weekly refresh; no bulk backfill is required. No banner, missing TheTVDB ID, missing key or provider failure keeps existing artwork. Discovery/empty results cache for 24 hours; failures cache for at least five minutes with bounded `Retry-After` (at most one day). The Worker retains downloaded artwork and modal previews in R2; browser responses stay private/no-store. Manual selections persist independently of metadata JSON and provider cache expiry. Immutable source-derived keys prevent automatic refreshes from overwriting selected image bytes. Do not purge referenced R2 assets. The selector uses `/v1/admin/artwork` with session admin authorization; preview and canonical reads require participant authentication. Save validates the banner against server-side discovery and accepts no arbitrary URL or uploaded bytes.
 
@@ -152,7 +158,7 @@ Browser tests also cover logout across tabs; `X-WW-Participant` only detects a s
 
 Only the anonymous login document allows the exact Google GIS SDK, Google sign-in frames/connections, and popup-compatible COOP. Authenticated `/login.html` redirects to the application; app documents allow only same-origin scripts and connections. Lucide 1.55.0 and Lexend Deca 5.3.0 are packaged locally with licenses; `jose` 6.2.12 validates Google credentials in the Worker. No unpkg/latest, third-party analytics or Google fonts requests remain. Login, application, API and R2 responses enforce private/no-store, no-referrer, nosniff and frame restrictions. Authenticated content is never put in browser localStorage; demo state is synthetic and loopback-only. Session credentials are opaque and hashed in D1; GIS credentials are neither stored nor logged.
 
-Prepared configuration disables Workers observability ingestion; code does not log request URLs, bodies, headers, credentials, subjects or emails. This cannot control account-level Logpush, HTTP logging, tracing, DNS analytics, external collectors or previous CDN caches. Before cutover, inspect and disable/redact sensitive request fields, cookie/body capture and query strings, including old bearer-link URLs. Never tail real login requests into shared output. Verify no cache rule overrides private/no-store. Check R2 has no public r2.dev/custom-domain exposure; the Worker gate cannot make an independently public bucket private. Privately purge any old cached artwork responses if needed. These live reviews/changes are separately approved work.
+Production configuration disables Workers observability ingestion; code does not log request URLs, bodies, headers, credentials, subjects or emails. This cannot control account-level Logpush, HTTP logging, tracing, DNS analytics, external collectors or previous CDN caches. The accepted operator review covers this cutover. For future logging changes, inspect and disable/redact sensitive request fields, cookie/body capture and query strings, including old bearer-link URLs. Never tail real login requests into shared output. Verify no cache rule overrides private/no-store. Check R2 has no public r2.dev/custom-domain exposure; the Worker gate cannot make an independently public bucket private. Privately purge any old cached artwork responses if needed. These live reviews/changes are separately approved work.
 
 The Google SDK is an intentional identity-provider trust dependency; it is not vendorable. Its execution is restricted to sign-in. Rate-limiting/WAF rules for public auth endpoints should be considered during the approved account review to protect D1 and Google verification capacity; no live rules are added here.
 
@@ -160,15 +166,15 @@ The Google SDK is an intentional identity-provider trust dependency; it is not v
 
 `wrangler.jsonc` retains `0 2 * * 3`. The `scheduled` handler calls `refreshDueShows`: up to 25 active, non-removed shows whose last metadata success is at least seven days old are processed sequentially through TVmaze. It updates D1 metadata/revisions and can retain changed artwork in R2; upstream failures record a sanitized category. It is independent of interactive authentication and is not a weekly email reminder.
 
-The 11 October 2026 read-only preflight confirmed live registration `0 2 * * 3`; this does not establish successful executions. Recheck registration before cutover. Deployment retains the schedule but changes its handler to include fanart enrichment and manual-choice preservation; continuing scheduled D1/R2 writes under the new code requires explicit approval. Maintenance retains the trigger with a no-op handler. Cron uses UTC: Wednesday 02:00 is 12:00 AEST / 13:00 AEDT in Sydney. Changes may take up to 15 minutes to propagate ([Cloudflare Cron documentation](https://developers.cloudflare.com/workers/configuration/cron-triggers/)). Do not manually invoke a production scheduled event as a smoke test. Review its next execution and output privately after approval.
+The 11 October 2026 final deployment confirmed live registration `0 2 * * 3` and activated the reviewed handler with fanart enrichment and manual-choice preservation under explicit approval. This does not establish successful executions. Google-safe maintenance retains the trigger with a no-op handler. Cron uses UTC: Wednesday 02:00 is 12:00 AEST / 13:00 AEDT in Sydney. Changes may take up to 15 minutes to propagate ([Cloudflare Cron documentation](https://developers.cloudflare.com/workers/configuration/cron-triggers/)). Do not manually invoke a production scheduled event as a smoke test. Review its next execution and output privately after approval.
 
-## Production cutover — separate approval required
+## Cutover procedure and recovery reference
 
 The ignored `.wrangler/preflight/READINESS.md` records private preflight evidence. The following operational gates and sequence contain no personal associations.
 
 ## Privileged inspection gates
 
-Scope inspection tokens to zone `nissen.nexus` and the owning account only. Existing 403 responses are unresolved permission failures, not evidence that records, jobs or rules are absent. Use GET only; never print Logpush destination credentials or legacy query strings.
+Scope inspection tokens to zone `nissen.nexus` and the owning account only. The final cutover accepted the operator dashboard confirmations listed above. Earlier 403 responses were permission failures, not evidence that records, jobs or rules were absent; do not reopen accepted gates or request a Logpush subscription. Use GET only; never print Logpush destination credentials or legacy query strings.
 
 | Inspection | Permission / manual dashboard alternative | Required evidence |
 | --- | --- | --- |
@@ -193,56 +199,21 @@ Restore access only by deploying the reviewed Google-only application/config/ass
 
 Supabase is retired legacy infrastructure. The operator explicitly excludes its inspection/modification from this cutover and makes later removal a separate task, not a cutover blocker. Preserve its data, do not contact it, and never restore it as runtime fallback. GitHub Pages retirement and canonical-domain privacy gates still apply independently.
 
-## Exact proposed cutover sequence — requires separate approval
+## Executed cutover stages — do not replay
 
-1. Complete privileged read-only DNS/certificate/cache/logging review. Confirm Google's authorized JavaScript origin is exactly `https://wirewednesday.nissen.nexus`, the intended audience permits all four accounts, and the fanart key is a valid project key. Confirm GitHub Pages retirement; leave retired Supabase untouched for its separate removal task. Record the approved commit, deployment/version/settings, current domain routes, Cron and bucket policy. Agree a short maintenance window; do not approach the scheduled execution time without an approved suspension strategy.
-2. Close the current legacy Worker and stop its Cron writes using the prepared maintenance-only Worker:
-
-   ```powershell
-   npx.cmd wrangler deploy --config .wrangler/preflight/maintenance.jsonc
-   ```
-
-   This is a production deployment requiring approval. It retains the existing workers.dev address temporarily but makes every request return 503, disables previews and makes scheduled handling a no-op. It intentionally has no D1/R2/assets bindings. Verify the old origin serves only maintenance and preview access is disabled. Do not continue if alternate writers to the canonical D1/R2 resources remain active; retired Supabase is outside this cutover scope. The maintenance artifact passed a local dry-run and was deployed in Stage 1; see current cutover state above.
-3. With writes stopped, create a private recovery point and full D1 export. The Stage 1 recovery bookmark/export and complete R2 archive are now independently verified; preserve them and refresh recovery artifacts before new writes if the frozen state changes. Historical exports alone are not the approved recovery set. Stop before migrations unless backup completion, checksums and recovery usability are confirmed privately:
-
-   ```powershell
-   npx.cmd wrangler d1 time-travel info DB --json > cloudflare/private-cutover-bookmark.json
-   npx.cmd wrangler d1 export DB --remote --output cloudflare/private-cutover-backup.sql
-   ```
-
-   Capture the first command's output privately in an ignored JSON file, not chat/shared logs. Preserve the export and verify a local checksum and successful completion; it contains sensitive historical hashes and must never be printed, committed or replayed automatically. Use authenticated management GETs to snapshot every distinct `poster_storage_path`/`card_art_storage_path` referenced by this D1 snapshot into ignored `.wrangler/preflight/r2-backup/`, preserving a path/content-type/checksum manifest. Require every referenced object or explicitly reviewed missing-object exception. Keep the live bucket intact. Backups/restore testing are not performed in this preflight; destructive restores require separate approval.
-4. Re-read production migration tracking/schema and the four participant ID/name/admin/active projections. Require exactly the inspected baseline and associations. Then apply only the pending migrations:
-
-   ```powershell
-   npx.cmd wrangler d1 migrations apply DB --remote
-   ```
-
-   Approve this only if Wrangler proposes exactly `0004_google_auth.sql`, `0005_fanart_banners.sql`, `0006_google_preapprovals.sql`. Stop on any other list, discrepancy or partial failure. Confirm these three tracking rows and new schema appear once; compare participant fields, nominations and rankings against the frozen backup, not merely counts. No import/reset, baseline replay or manual migration-history rewriting is needed.
-5. Prepare only the two production settings in the ignored deployment-scoped secrets file; do not upload them before final application deployment:
-
-   ```powershell
-   # Prepared locally: .wrangler/preflight/stage2/production-secrets.json
-   # Upload only with the final approved wrangler deploy --secrets-file command.
-   ```
-
-   Legacy secret helpers are prohibited during maintenance because secret put immediately deploys. Validate local key names/values privately; require secret-name presence only after final deployment. Production APP_ORIGIN comes from the final reviewed Wrangler configuration.
-6. While maintenance prevents sign-in, insert the reviewed four-row pre-approval SQL:
-
-   ```powershell
-   npx.cmd wrangler d1 execute DB --remote --file cloudflare/private-production-approvals.sql
-   ```
-
-   Require exactly four returned IDs/enabled flags and privately verify one-to-one associations. Do not print query SQL or addresses. Existing participant IDs/permissions/ballots must remain unchanged. No `sub` exists until the corresponding first verified login. Do not use UPSERT or extend this four-account whitelist.
-7. Deploy the reviewed app/config/assets:
-
-   ```powershell
-   npx.cmd wrangler deploy --config wrangler.jsonc --secrets-file .wrangler/preflight/stage2/production-secrets.json
-   ```
-
-   This binds the existing D1/R2 resources, adds Static Assets, replaces legacy bearer auth, sets the same-origin APP_ORIGIN, explicitly disables workers.dev and previews, and creates the custom-domain/DNS/certificate association. Approve domain/DNS effects explicitly, even though no manual DNS record is planned. Stop on any conflicting record/domain rather than replacing it implicitly. The unchanged Cron registration now invokes the new scheduled code; approve that behavior as part of this step. Verify worker settings, both alternative URL exposure flags, custom-domain registration and issued HTTPS certificate using live read-only checks.
-8. Live acceptance requires controlled, explicit authorization for authentication/session writes and first-use `sub` claims. First check anonymous root/sign-in, private-module/artwork denial, same-origin origin enforcement and old-link rejection without submitting real bearer tokens. Then have each of the four people sign in to confirm the correct existing participant ID, administrator status, remembered/short sessions, logout/revocation and retained personal rankings/nominations. Confirm an unapproved account is rejected (its request record is a D1 write). Verify all four allowances are consumed, exactly four subject mappings exist, and no accounts were created. Metadata audit may retain artwork/write D1/R2 on authenticated load; approve those side effects. Do not edit real nominations/rankings or select artwork as an unapproved smoke test. Any deliberate mutation test requires separate scope/cleanup. Do not manually fire Cron.
-9. Retire GitHub Pages or replace it with an approved plain canonical sign-in landing page, leave retired Supabase untouched for its separate removal task. Announce the canonical site only after all gates pass. Until all four subjects are bound, the existing Board confirmation denominator includes only users with enabled bound mappings; retained ballots are preserved.
+1. **Stage 1:** verified resource identities; deployed universal closed-access maintenance; froze D1/R2 writes; retained original Worker settings/source/recovery bookmark; independently validated complete D1 and all 48 R2 objects. Use the preserved originals for comparison, never overwrite them with new exports.
+2. **Stage 2:** verified off-device copies; passed the exact-release local checks and secret-aware dry-run; applied only migrations 0004–0006 sequentially; independently verified four reviewed preapprovals without claimed subjects; prepared two-setting secrets file and post-migration recovery export. No final app/domain was deployed in this stage.
+3. **Final deployment:** under explicit approval, accepted manual inspection gates, reconfirmed maintenance/resources/private settings/release hashes, deployed the exact final Worker/assets/settings with the command above and attached the canonical domain. Verified DNS/TLS, access controls, headers, all protected D1 data, every R2 object and active Cron registration. No production scheduled event or participant nomination/ranking mutation was invoked.
+4. **Manual follow-up:** each participant completes real Google sign-in and session/data checks; observe the next Cron execution privately; retire GitHub Pages under the relevant operational approval. Supabase removal remains separate.
 
 ## Failure/rollback policy
 
-Keep or restore the closed maintenance Worker on failure. Preserve additive D1 tables and R2 artifacts. Do not roll back to a legacy bearer Worker, reset D1, restore a snapshot over new writes or fall back to Supabase. If real writes have occurred, reconciliation/export is required before any approved data restore. Domain/secret/Cron changes and any restores require separately reviewed approval. Existing backup files stay private.
+On a failed deployment, authentication, data-integrity or security gate, stop and restore the prepared **post-domain** closed-access maintenance Worker:
+
+```powershell
+npx.cmd wrangler deploy --config .wrangler/preflight/maintenance-domain.jsonc
+```
+
+This reviewed configuration targets existing `fff-api`, retains `wirewednesday.nissen.nexus`, explicitly disables workers.dev/previews, has no DB/R2/assets bindings and keeps the Wednesday registration with a no-op scheduled handler. It returns universal private/no-store 503 responses and never authenticates bearer tokens. Confirm the expected domain/route configuration before deployment, then verify 503 on canonical/legacy paths, no data bindings, no prior-version traffic and disabled alternate URLs. The pre-domain maintenance config is historical and must not be used blindly after launch.
+
+Preserve additive schema, approvals, participant data and R2 objects. Do not deploy the old bearer version, reset/import D1, overwrite new writes from an earlier backup or fall back to Supabase. Take a new private recovery snapshot and reconcile any newer writes before a separately approved data restore. Restore access only by redeploying a reviewed Google-only application with compatible schema, correct secrets, same-origin policy and explicit URL/Cron settings. Closed-access maintenance rollback is authorised for cutover safety; data restoration and unrelated DNS/resource changes require separate approval. Existing evidence/secrets stay private and uncommitted.
