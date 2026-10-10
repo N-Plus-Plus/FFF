@@ -4,7 +4,7 @@
 
 The authorised final cutover is live at **https://wirewednesday.nissen.nexus**, existing Worker `fff-api`, version `18d48994-4cc0-4a46-ba5e-00e4bb7c47b3` at 100% traffic. Maintenance is inactive. Existing D1 `fff` (Oceania) and R2 `fff-artwork` remain the production resources. Both `workers_dev` and `preview_urls` are false; tested alternate URLs return 404. The canonical custom domain belongs to the expected zone/account, DNS resolves publicly and its trusted HTTPS certificate covers the hostname.
 
-The uploaded Worker bundle exactly matches the Stage 2 secret-aware dry-run bundle. Release source was the clean tracked state at `0a77d8e`; subsequent changes record operations in documentation only. All eight relevant established local checks passed on this release: contracts, session hash, hosting contracts, preapproval, mocked-Google browser flow, fanart, actual Wrangler hosting browser smoke and placement browser smoke. A formal full-suite command is not established; these checks were not repeated for documentation-only changes. Production deployment used:
+The uploaded Worker bundle exactly matches the Stage 2 secret-aware dry-run bundle. Release source was the clean tracked state at `0a77d8e`; subsequent changes record operations in documentation only. All eight relevant established local checks passed on this release: contracts, session hash, hosting contracts, preapproval, mocked-Google browser flow, fanart, actual Wrangler hosting browser smoke and placement browser smoke. This is historical release evidence. The current repository defines `npm test` and `npm run test:browser`; these checks were not repeated for documentation-only changes. Production deployment used:
 
 ```powershell
 npx.cmd wrangler deploy --config wrangler.jsonc --secrets-file .wrangler/preflight/stage2/production-secrets.json
@@ -26,7 +26,7 @@ Private final evidence is under ignored `.wrangler/preflight/final/`; release fi
 
 Each of the four people must sign in themselves using the confirmed Google account and verify their existing identity, administrator role where applicable, retained personal nominations/rankings, authenticated application modules/artwork, remembered/browser sessions and logout across tabs. Verify first-use allowance consumption and subject mappings privately after those sign-ins; do not fabricate claims. Live authenticated delivery, Google popup completion and provider refresh behaviour cannot be certified by anonymous tests. Authenticated metadata audits can legitimately update metadata/artwork; avoid nomination/ranking edits during acceptance. Unknown-account rejection remains covered by local signed-identity tests; a real unapproved-account attempt would create an operator request and is not necessary here.
 
-GitHub Pages retirement remains a follow-up; no Pages setting was changed. Supabase removal remains a separate task and is not a cutover blocker. Until all four people bind their subjects, Board confirmation counts only active participants with enabled subject mappings; all retained ballots remain present.
+GitHub Pages retirement remains a follow-up; no Pages setting was changed. Repository Supabase tooling has been removed; Cloudflare is the sole application authority. Until all four people bind their subjects, Board confirmation counts only active participants with enabled subject mappings; all retained ballots remain present.
 
 ### Preserved recovery evidence
 
@@ -43,7 +43,7 @@ Stage 2 applied migrations 0004–0006 sequentially with isolated one-migration 
 
 Existing `fff-api` serves the canonical HTTPS origin `https://wirewednesday.nissen.nexus`: Static Assets via `ASSETS`, `/auth/*` and `/v1/*` via existing D1 `fff`, and authenticated `/artwork/*` via existing R2 `fff-artwork`. Both production bindings are confirmed by the operator. No replacement resources or imports are required. Production config explicitly disables workers.dev, version preview URLs and cross-origin API access. GitHub Pages is not a fallback after cutover.
 
-Google completely replaces participant links. Migration `0004_google_auth.sql` only adds mapping, request, challenge and session tables plus invalidation triggers; it does not change participant IDs, nominations, rankings or history. Historical link columns remain inert and are never read for authentication or confirmation. Retained Supabase source is historical, not a second login route. Cloudflare D1 migrations own the current backend; never run resets or replay import SQL.
+Google completely replaces participant links. Migration `0004_google_auth.sql` only adds mapping, request, challenge and session tables plus invalidation triggers; it does not change participant IDs, nominations, rankings or history. Historical link columns remain inert and are never read for authentication or confirmation. Historical link fields are compatibility data, not a second login route. Cloudflare D1 migrations own the current backend; never run resets or replay import SQL.
 
 ## Google and environment setup
 
@@ -148,7 +148,7 @@ Require exactly one returned participant ID; zero rows means no change. A missin
 
 ## Local verification
 
-Run syntax checks, `node scripts/verify-contracts.mjs`, `node cloudflare/tests/session-hash.test.mjs`, `node cloudflare/tests/hosting.test.mjs`, `node cloudflare/tests/auth-browser.test.mjs`, and `node cloudflare/tests/preapproval.test.mjs`. With local Wrangler running, run `node scripts/hosting-browser-test.mjs` and `node scripts/placement-browser-test.mjs`. Finally run `npx.cmd wrangler deploy --dry-run --outdir .wrangler/hosting-dry-run` without the local environment file.
+Run `npm test` (including metadata/Cron and fanart checks), syntax checks, `node scripts/verify-contracts.mjs`, `node cloudflare/tests/session-hash.test.mjs`, `node cloudflare/tests/hosting.test.mjs`, `node cloudflare/tests/auth-browser.test.mjs`, and `node cloudflare/tests/preapproval.test.mjs`. With local Wrangler running, run `node scripts/hosting-browser-test.mjs` and `node scripts/placement-browser-test.mjs`. Finally run `npx.cmd wrangler deploy --dry-run --outdir .wrangler/hosting-dry-run` without the local environment file, then `npm run verify:privacy` to scan the allowlisted assets, active source and generated bundle.
 
 Mock tests also cover four pre-approved fictional identities, atomic first-use binding, concurrent claims, Gmail/Workspace authority, third-party review, stable-sub login after email change, consumed/disabled approvals, existing-data preservation and approval privacy. Existing mock tests cover signed Google claims, denied approval, incorrect/duplicate mappings, impersonation attempts, same-origin protection, remembered and short sessions, expiry/revocation/logout, private assets/artwork, nominations and rankings. Optional `node scripts/review-google-button.mjs` follows CanBan's current review script using local bytes and the public SDK in anonymous Chromium, checking official `outline_dark` presentation/resizing. It never contacts the deployed Worker or signs in. Personalised Google rendering and a real approved sign-in require manual acceptance after setup.
 
@@ -197,14 +197,14 @@ Restore access only by deploying the reviewed Google-only application/config/ass
 
 ## Retired Supabase boundary
 
-Supabase is retired legacy infrastructure. The operator explicitly excludes its inspection/modification from this cutover and makes later removal a separate task, not a cutover blocker. Preserve its data, do not contact it, and never restore it as runtime fallback. GitHub Pages retirement and canonical-domain privacy gates still apply independently.
+Supabase repository configuration, migrations, functions, schedules and transfer tools are removed. Do not contact or delete the hosted project as part of app maintenance. Cloudflare migrations are the sole schema authority; filenames and inert compatibility fields remain unchanged. Private recovery exports remain ignored and preserved. GitHub Pages retirement requires separate approval.
 
 ## Executed cutover stages — do not replay
 
 1. **Stage 1:** verified resource identities; deployed universal closed-access maintenance; froze D1/R2 writes; retained original Worker settings/source/recovery bookmark; independently validated complete D1 and all 48 R2 objects. Use the preserved originals for comparison, never overwrite them with new exports.
 2. **Stage 2:** verified off-device copies; passed the exact-release local checks and secret-aware dry-run; applied only migrations 0004–0006 sequentially; independently verified four reviewed preapprovals without claimed subjects; prepared two-setting secrets file and post-migration recovery export. No final app/domain was deployed in this stage.
 3. **Final deployment:** under explicit approval, accepted manual inspection gates, reconfirmed maintenance/resources/private settings/release hashes, deployed the exact final Worker/assets/settings with the command above and attached the canonical domain. Verified DNS/TLS, access controls, headers, all protected D1 data, every R2 object and active Cron registration. No production scheduled event or participant nomination/ranking mutation was invoked.
-4. **Manual follow-up:** each participant completes real Google sign-in and session/data checks; observe the next Cron execution privately; retire GitHub Pages under the relevant operational approval. Supabase removal remains separate.
+4. **Manual follow-up:** each participant completes real Google sign-in and session/data checks; observe the next Cron execution privately; retire GitHub Pages under the relevant operational approval. Hosted Supabase remains untouched and outside this runbook.
 
 ## Failure/rollback policy
 

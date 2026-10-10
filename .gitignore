@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 node_modules/
+# Preserve ignored machine-local historical CLI cache; no application tooling remains.
 supabase/.temp/
 *.log
 .DS_Store

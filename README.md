@@ -81,12 +81,11 @@ Visit `http://127.0.0.1:3000/?demo=1` for synthetic local demo data. Demo mode i
 Run:
 
 ```powershell
-node scripts/verify-contracts.mjs
-node cloudflare/tests/session-hash.test.mjs
-node cloudflare/tests/hosting.test.mjs
-node cloudflare/tests/auth-browser.test.mjs
-node cloudflare/tests/preapproval.test.mjs
-node cloudflare/tests/fanart.test.mjs
+npm test
+npm run test:browser # requires the local Wrangler above
+npm run build
+npm run deploy:dry-run
+npm run verify:privacy
 ```
 
 The auth tests self-host local Worker handlers with disposable local D1/R2, signed mock Google identities and mocked TVmaze. With local Wrangler running, also run `node scripts/hosting-browser-test.mjs` and `node scripts/placement-browser-test.mjs`. Optional `node scripts/review-google-button.mjs` reads only the public client ID from `.env.vars`, serves local bytes and fetches the public Google SDK in an anonymous context to review the official button at 320/360/390/768/1440px; it never signs in or contacts production APIs. Its artifacts are ignored.
@@ -95,6 +94,6 @@ The auth tests self-host local Worker handlers with disposable local D1/R2, sign
 
 See [cloudflare/DEPLOYMENT.md](cloudflare/DEPLOYMENT.md) for Google setup, operator-only pre-approval/mapping review, forward migration, cutover, verification and rollback. Establish pre-approvals before announcing sign-in availability; no prior participant sign-in is needed for Gmail/Workspace accounts. Third-party email accounts require reviewed subject mappings. workers.dev and version preview URLs are disabled and return no application. GitHub Pages retirement remains a separate operational follow-up; it is not a runtime fallback. Old credentials have no meaning in the new application.
 
-`wrangler.jsonc` retains `0 2 * * 3` for weekly metadata refresh. The final deployment activates the reviewed metadata handler; live schedule registration is verified. Wednesday 02:00 UTC is 12:00 AEST / 13:00 AEDT in Sydney. No production scheduled event was invoked; the next scheduled execution, 14 October 2026, remains to be observed privately. This is not an ordering-reminder schedule. Supabase is retired legacy infrastructure: do not inspect or modify it during cutover. Its later removal is a separate task and not a launch blocker.
+`wrangler.jsonc` retains `0 2 * * 3` for weekly metadata refresh. The final deployment activates the reviewed metadata handler; live schedule registration is verified. Wednesday 02:00 UTC is 12:00 AEST / 13:00 AEDT in Sydney. No production scheduled event was invoked; the next scheduled execution, 14 October 2026, remains to be observed privately. This is not an ordering-reminder schedule. Cloudflare is the sole backend authority. Retired Supabase repository tooling has been removed; hosted infrastructure is outside ordinary app operations.
 
 Production version `18d48994-4cc0-4a46-ba5e-00e4bb7c47b3` passed safe anonymous acceptance: DNS, trusted hostname certificate, Google button rendering, security headers, private-module/API/artwork denial, legacy authentication rejection and alternate URL closure. Four existing participants (one administrator), 33 shows, 41 nomination rows, 117 ranking rows and four unclaimed preapprovals were preserved exactly. All 48 R2 objects match their original keys, metadata and SHA-256 content hashes. Recovery artifacts remain private locally and in approved OneDrive storage. Each participant must still perform their own verified Google sign-in to check identity, role, retained personal data and session behaviour; no subjects were fabricated. See the deployment runbook for recovery and outstanding checks.

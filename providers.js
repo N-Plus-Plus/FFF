@@ -74,7 +74,7 @@ const REJECTED_TITLE_TYPES = new Set([
 ]);
 
 export function createMetadataProvider({ config, demoMode }) {
-  const imdb = demoMode ? createDemoImdbAdapter() : createEdgeImdbAdapter(config);
+  const imdb = demoMode ? createDemoImdbAdapter() : createWorkerMetadataAdapter(config);
 
   return {
     providerName: "TVmaze",
@@ -99,7 +99,7 @@ export function createMetadataProvider({ config, demoMode }) {
   };
 }
 
-function createEdgeImdbAdapter(config) {
+function createWorkerMetadataAdapter(config) {
   return {
     async search(query) {
       const data = await requestImdb(config, { action: "search", query });

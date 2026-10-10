@@ -11,7 +11,20 @@ import {
   normalizeProviderTitle
 } from "../providers.js";
 import { createDataStore } from "../store.js";
-import { selectTvmazeCardArt } from "../supabase/functions/_shared/tvmaze-art.js";
+import { normalizeTvmaze } from "../cloudflare/src/index.js";
+
+// Exercise artwork selection through the active Worker metadata boundary.
+async function selectTvmazeCardArt(show, images) {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.equal(new URL(url).origin, "https://api.tvmaze.com");
+    return Response.json(String(url).endsWith("/images") ? images : []);
+  };
+  try {
+    const item = await normalizeTvmaze({ ...show, id: 1, externals: { imdb: "tt90000001" } });
+    return { type: item.card_art_type, sourceUrl: item.card_art_source_url };
+  } finally { globalThis.fetch = realFetch; }
+}
 
 class MemoryStorage {
   constructor() {
@@ -58,18 +71,12 @@ const rootFiles = {
   index: await readFile(new URL("../index.html", import.meta.url), "utf8"),
   css: await readFile(new URL("../style.css", import.meta.url), "utf8"),
   store: await readFile(new URL("../store.js", import.meta.url), "utf8"),
-  providers: await readFile(new URL("../providers.js", import.meta.url), "utf8"),
-  migration: await readFile(new URL("../supabase/migrations/20260715000400_sequential_irv_lifecycle_privacy.sql", import.meta.url), "utf8"),
-  cardMigration: await readFile(new URL("../supabase/migrations/20260716000100_card_metadata_background_audit.sql", import.meta.url), "utf8"),
-  artMigration: await readFile(new URL("../supabase/migrations/20260716000200_tvmaze_card_art_storage.sql", import.meta.url), "utf8"),
-  edge: await readFile(new URL("../supabase/functions/imdb/index.ts", import.meta.url), "utf8"),
-  refreshEdge: await readFile(new URL("../supabase/functions/metadata-refresh/index.ts", import.meta.url), "utf8"),
-  reminderEdge: await readFile(new URL("../supabase/functions/weekly-order-reminders/index.ts", import.meta.url), "utf8")
+  providers: await readFile(new URL("../providers.js", import.meta.url), "utf8")
 };
 
 verifyRanking();
 verifyProviders();
-verifyTvmazeCardArt();
+await verifyTvmazeCardArt();
 await verifyDemoStore();
 verifyTextContracts();
 
@@ -199,9 +206,9 @@ function verifyProviders() {
   assert.equal(isWeeklyRefreshDue("2026-07-09T00:00:00.000Z", new Date("2026-07-15T00:00:00.000Z")), false);
 }
 
-function verifyTvmazeCardArt() {
+async function verifyTvmazeCardArt() {
   const show = { image: { original: "https://example.invalid/poster.jpg" } };
-  const panoramicBanner = selectTvmazeCardArt(show, [
+  const panoramicBanner = await selectTvmazeCardArt(show, [
     { type: "background", main: false, resolutions: { original: { url: "https://example.invalid/bg-a.jpg", width: 100, height: 50 } } },
     { type: "background", main: true, resolutions: { original: { url: "https://example.invalid/bg-main.jpg", width: 120, height: 60 } } },
     { type: "banner", main: true, resolutions: { original: { url: "https://example.invalid/banner.jpg", width: 900, height: 200 } } }
@@ -209,26 +216,26 @@ function verifyTvmazeCardArt() {
   assert.equal(panoramicBanner.type, "banner", "the closest panoramic art is preferred");
   assert.equal(panoramicBanner.sourceUrl, "https://example.invalid/banner.jpg");
 
-  const banner = selectTvmazeCardArt(show, [
+  const banner = await selectTvmazeCardArt(show, [
     { type: "banner", main: false, resolutions: { medium: { url: "https://example.invalid/banner-medium.jpg", width: 500, height: 140 } } },
     { type: "banner", main: true, resolutions: { original: { url: "https://example.invalid/banner-main.jpg", width: 900, height: 220 } } }
   ]);
   assert.equal(banner.type, "banner", "banner is used when no background exists");
   assert.equal(banner.sourceUrl, "https://example.invalid/banner-main.jpg", "main banner original is preferred");
 
-  const mainTieBreak = selectTvmazeCardArt(show, [
+  const mainTieBreak = await selectTvmazeCardArt(show, [
     { type: "banner", main: false, resolutions: { original: { url: "https://example.invalid/banner-a.jpg", width: 1000, height: 200 } } },
     { type: "banner", main: true, resolutions: { original: { url: "https://example.invalid/banner-main.jpg", width: 1000, height: 200 } } }
   ]);
   assert.equal(mainTieBreak.sourceUrl, "https://example.invalid/banner-main.jpg", "main art breaks an aspect-ratio tie");
 
-  const missingResolution = selectTvmazeCardArt(show, [
+  const missingResolution = await selectTvmazeCardArt(show, [
     { type: "background", main: true, resolutions: { medium: { url: "https://example.invalid/bg-medium-ignored.jpg" } } },
     { type: "banner", main: false, resolutions: { medium: { url: "https://example.invalid/banner-medium.jpg" } } }
   ]);
   assert.equal(missingResolution.type, "banner", "background without original resolution is skipped");
 
-  const poster = selectTvmazeCardArt(show, [
+  const poster = await selectTvmazeCardArt(show, [
     { type: "background", main: true, resolutions: {} },
     { type: "banner", main: false, resolutions: {} }
   ]);
@@ -313,7 +320,7 @@ function verifyTextContracts() {
   assert.match(rootFiles.app, /Total Runtime:/, "cards label cumulative runtime as Total Runtime");
   assert.match(rootFiles.app, /seasonCount[\s\S]*episodeText[\s\S]*return `\$\{seasonCount\} season/, "cards render season count before episode count");
   assert.match(rootFiles.app, /queueBackgroundAudit/, "app audits rendered card backgrounds on load");
-  assert.match(rootFiles.providers, /verify-backgrounds/, "metadata edge adapter can request stale background repair");
+  assert.match(rootFiles.providers, /verify-backgrounds/, "Worker metadata adapter can request stale background repair");
   assert.match(rootFiles.app, /show\.cardArtUrl[\s\S]*show\.posterUrl/, "card backgrounds prefer stored card art and retain poster fallback");
   assert.doesNotMatch(rootFiles.app, /Score /, "ordinary Board UI does not display numeric aggregate score");
   assert.match(rootFiles.app, /sessionStorage\.setItem\(REMINDER_DISMISSED_KEY/, "unranked reminder dismissal is session scoped");
@@ -321,57 +328,6 @@ function verifyTextContracts() {
   assert.doesNotMatch(rootFiles.index, /RV metadata by TVMaze/i, "legacy TVMaze attribution copy stays out of the app shell");
   assert.doesNotMatch(rootFiles.app, /nominators/, "browser UI does not render nominator names");
   assert.doesNotMatch(rootFiles.store, /nominators/, "frontend state does not normalize nominator names");
-
-  assert.match(rootFiles.migration, /sequential-irv-v1/, "SQL exposes named IRV Board strategy");
-  assert.match(rootFiles.migration, /run_irv_election/, "SQL uses repeated instant-runoff helper");
-  assert.match(rootFiles.migration, /imdb_numeric_key/, "SQL uses numeric IMDb tie-break key");
-  assert.match(rootFiles.migration, /ranked_active_user_count = show_row\.active_user_count/, "confirmation requires all active users");
-  assert.match(rootFiles.migration, /delete from public\.user_show_rankings\s+where show_id = v_show\.id/i, "database restore clears prior ranking state");
-  assert.match(rootFiles.migration, /tvdb_record_id/, "nomination persists TVDB record ID into dedicated column");
-  assert.match(rootFiles.migration, /metadata_source_provenance/, "nomination persists source provenance");
-  assert.match(rootFiles.cardMigration, /add column if not exists total_season_count/, "card metadata migration persists season count");
-  assert.match(rootFiles.cardMigration, /add column if not exists end_year/, "card metadata migration persists ended year");
-  assert.match(rootFiles.cardMigration, /total_season_count = case/, "metadata refresh updates season count");
-  assert.match(rootFiles.cardMigration, /'end_year', b\.end_year/, "Board JSON exposes ended year");
-  assert.match(rootFiles.artMigration, /card_art_storage_path/, "card art migration persists stored art path");
-  assert.match(rootFiles.artMigration, /admin_record_show_card_art_result/, "card art migration exposes trusted copy result RPC");
-  assert.match(rootFiles.artMigration, /s\.card_art_storage_path is null/, "metadata refresh candidates include card art backfill");
-  const retiredMeanStrategyPattern = new RegExp(["mean", "explicit", "position", "v1"].join("-"));
-  assert.doesNotMatch(rootFiles.migration, retiredMeanStrategyPattern, "old Board strategy is absent from final migration");
-  assert.doesNotMatch(rootFiles.migration, /jsonb_agg\(u\.display_name/, "browser RPC show JSON does not expose private nomination names");
-
-  assert.match(rootFiles.edge, /TVDB_IMDB_URL_TEMPLATE/, "TVDB fallback is only behind Edge secrets");
-  assert.match(rootFiles.edge, /https:\/\/api\.tvmaze\.com/, "IMDb Edge Function uses TVmaze as primary provider");
-  assert.match(rootFiles.edge, /\/search\/shows\?q=/, "IMDb Edge Function uses TVmaze search");
-  assert.match(rootFiles.edge, /\/lookup\/shows\?imdb=/, "IMDb Edge Function resolves exact IMDb IDs through TVmaze");
-  assert.match(rootFiles.edge, /\/shows\/\$\{tvmazeId\}\/episodes/, "IMDb Edge Function retrieves TVmaze episodes");
-  assert.match(rootFiles.edge, /action: "verify-backgrounds"/, "IMDb Edge Function exposes narrow background verification action");
-  assert.match(rootFiles.edge, /selectTvmazeCardArt/, "IMDb Edge Function uses shared TVmaze card art selection");
-  assert.match(rootFiles.edge, /admin_record_show_card_art_result/, "IMDb Edge Function records copied card art");
-  assert.match(rootFiles.edge, /externals\.imdb/, "TVmaze canonical identity comes from externals.imdb");
-  assert.match(rootFiles.edge, /cumulativeExplicitRuntime/, "TVmaze runtime is summed only from explicit episode runtime");
-  assert.doesNotMatch(rootFiles.edge, /IMDB_SEARCH_URL_TEMPLATE/, "TVmaze primary provider does not require generic IMDb search URL template");
-  assert.doesNotMatch(rootFiles.edge, /IMDB_TITLE_URL_TEMPLATE/, "TVmaze primary provider does not require generic IMDb title URL template");
-  assert.doesNotMatch(rootFiles.edge, /IMDB_API_KEY/, "TVmaze primary provider does not require an API key");
-  assert.doesNotMatch(rootFiles.edge, /stringValue\(item\.imdbIdCrossref\)\s*\|\|\s*canonicalImdbId/, "IMDb Edge Function does not substitute requested IMDb ID for TVDB cross-reference");
-  assert.match(rootFiles.edge, /tvdb\.imdb_id !== primary\.imdb_id/, "TVDB cannot change canonical IMDb identity");
-  assert.match(rootFiles.edge, /REJECTED_TITLE_TYPES/, "provider boundary rejects episodes, TV movies, and specials");
-  assert.match(rootFiles.refreshEdge, /Service-role authorization is required/, "browser refresh calls are rejected");
-  assert.match(rootFiles.refreshEdge, /https:\/\/api\.tvmaze\.com/, "refresh function uses TVmaze as primary provider");
-  assert.match(rootFiles.refreshEdge, /\/lookup\/shows\?imdb=/, "refresh function uses TVmaze exact IMDb lookup");
-  assert.match(rootFiles.refreshEdge, /\/shows\/\$\{tvmazeId\}\/episodes/, "refresh function retrieves TVmaze episodes");
-  assert.match(rootFiles.refreshEdge, /selectTvmazeCardArt/, "refresh function uses shared TVmaze card art selection");
-  assert.match(rootFiles.refreshEdge, /admin_record_show_card_art_result/, "refresh function records copied card art");
-  assert.match(rootFiles.refreshEdge, /externals\.imdb/, "refresh canonical identity comes from TVmaze externals.imdb");
-  assert.doesNotMatch(rootFiles.refreshEdge, /IMDB_TITLE_URL_TEMPLATE/, "refresh function does not require generic IMDb title URL template");
-  assert.doesNotMatch(rootFiles.refreshEdge, /IMDB_API_KEY/, "refresh function does not require an IMDb API key");
-  assert.doesNotMatch(rootFiles.refreshEdge, /imdb_id_crossref\) \|\| canonicalImdbId/, "refresh function requires explicit TVDB cross-reference");
-  assert.match(rootFiles.refreshEdge, /admin_list_metadata_refresh_candidates/, "weekly refresh function loads due shows through service RPC");
-  assert.match(rootFiles.refreshEdge, /metadata_refresh_failure_category/, "provider failure category is sanitized and retained");
-  assert.match(rootFiles.refreshEdge, /copyPosterToStorage/, "refresh function can update posters through trusted code");
-  assert.doesNotMatch(rootFiles.refreshEdge, /console\.log\(.*token/i, "refresh logging does not include raw tokens");
-  assert.match(rootFiles.reminderEdge, /requestedRecipientNames/, "weekly reminder function supports trusted single-recipient tests");
-  assert.match(rootFiles.reminderEdge, /recipient_names/, "weekly reminder manual tests filter by requested recipient names");
 
   assert.match(rootFiles.providers, /REJECTED_TITLE_TYPES/, "browser provider normalization rejects unsupported one-off titles");
   assert.match(rootFiles.store, /computeProvisionalBoard/, "demo Board uses shared ranking semantics");
