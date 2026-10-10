@@ -155,7 +155,7 @@ try {
   await context.route("**/*",route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const page=await context.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
   await page.goto(origin);const edit=page.locator("#catalogueList").getByRole("button",{name:"Edit artwork for Synthetic show"}).first();await edit.waitFor();
-  const position=await edit.evaluate(e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,nextLeft:e.nextElementSibling.getBoundingClientRect().left}));assert(position.right<=position.nextLeft,"Edit sits immediately left of nomination action");
+  const position=await edit.evaluate(e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,nextLeft:e.nextElementSibling.getBoundingClientRect().left}));assert(position.right<=position.nextLeft,"Edit sits immediately left of Remove");
   await edit.click();const dialog=page.getByRole("dialog");await dialog.locator('.artwork-option[aria-pressed="true"]').waitFor();
   const pickerData=await (await api("/v1/admin/artwork",admin,{imdbId:"tt90000001"})).json();
   assert.equal(await dialog.locator('.artwork-option[aria-pressed="true"] img').getAttribute("src"),pickerData.banners.find(b=>b.id==="3").url);

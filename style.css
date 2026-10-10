@@ -470,7 +470,13 @@ h2 {
 }
 
 .nomination-actions { display: flex; align-items: center; gap: 0.4rem; }
-.icon-button.artwork-edit { color: #000; flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.icon-button.artwork-edit, .icon-button.artwork-remove, .rank-controls .icon-button {
+  flex-shrink: 0;
+  background: var(--asphalt-dark);
+  color: #fff;
+}
+.icon-button.artwork-edit:hover, .icon-button.artwork-remove:hover, .rank-controls .icon-button:not(:disabled):hover { background: var(--surface-hover); }
+.icon-button.artwork-edit:focus-visible, .icon-button.artwork-remove:focus-visible, .rank-controls .icon-button:focus-visible { outline-offset: -2px; }
 .artwork-dialog {
   color: var(--text-primary, #fff);
   background: var(--surface-base);
@@ -1136,14 +1142,18 @@ h2 {
 .card-background[data-fanart] img { object-fit: contain; }
 .show-meta { min-width: 0; min-height: 0; }
 .show-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.show-summary { display: contents; }
 .show-details { display: flex; gap: 0.5rem; overflow-x: auto; scrollbar-width: thin; }
 .show-details .show-subtitle { flex: 0 0 auto; white-space: nowrap; }
 .show-details .show-subtitle--placeholder { display: none; }
 .card-actions { display: flex; align-items: center; gap: 0.4rem; }
 .result-card > .poster { height: 100%; width: auto; max-width: 100%; }
-.show-card:has(.rating-stars) .show-meta { padding-top: 1.2rem; }
+#panel-add .show-details, #panel-list .show-details, #panel-board .show-details { display: block; overflow: visible; }
+#panel-add .show-summary, #panel-list .show-summary, #panel-board .show-summary { display: block; }
+#panel-list .show-title:has(~ .rating-stars) { padding-right: 7rem; }
+#panel-list .rating-stars { left: auto; right: 0; top: 0; }
 .rating-stars { left: 3rem; right: auto; top: 0.25rem; }
-.leader-card .show-meta { padding-right: 5rem; }
+.leader-card:has(.leader-vote-badge) .show-title { padding-right: 5.5rem; }
 @media (max-width: 600px) {
   .show-card, .leader-card { grid-template-columns: 2.1rem minmax(0, 1fr) auto; padding: 2px; gap: 0.25rem; }
   .rank-choice-card, .placement-card, .result-card--catalogue { grid-template-columns: minmax(0, 1fr) auto; }
@@ -1155,7 +1165,10 @@ h2 {
   .card-actions .button { width: 2rem; min-height: 2rem; padding: 0; font-size: 0; gap: 0; }
   .card-actions .button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .nomination-actions, .card-actions { gap: 0.2rem; }
-  .show-card:has(.rating-stars) .show-meta { padding-top: 0.75rem; }
+  #panel-add .show-title, #panel-list .show-title, #panel-board .show-title { margin-bottom: 0; }
+  #panel-add .show-summary, #panel-list .show-summary, #panel-board .show-summary { display: flex; gap: 0.5rem; overflow-x: auto; scrollbar-width: none; }
+  #panel-add .show-details > .show-subtitle, #panel-list .show-details > .show-subtitle, #panel-board .show-details > .show-subtitle { overflow-x: auto; scrollbar-width: none; }
+  #panel-list .show-title:has(~ .rating-stars) { padding-right: 4.25rem; }
   .rating-stars { width: 4rem; left: 2.6rem; top: 2px; }
   .rating-star { width: 0.7rem; }
   .placement-result { margin: 0; font-size: 0.7rem; line-height: 1.1; }

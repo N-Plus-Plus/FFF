@@ -454,12 +454,12 @@ function renderSearchResults() {
     const artworkShow = known || show;
     const hasBanner = artworkShow.cardArtType === "fanart-tvbanner";
     card.className = hasBanner ? "result-card result-card--catalogue" : "result-card";
+    card.setAttribute("aria-label", `${show.title}: ${status}`);
     card.innerHTML = `
       ${hasBanner ? backgroundMarkup(artworkShow) : posterMarkup(show)}
       <div class="show-meta">
         ${titleMarkup(show)}
         ${metadataMarkup(show)}
-        <p class="show-subtitle">${escapeHtml(status)}</p>
       </div>
       <div class="card-actions"></div>
     `;
@@ -593,19 +593,25 @@ function renderShowActions(container, show, options = {}) {
     container.append(edit);
   }
 
-  if (known?.currentUserNominated) {
-    container.append(actionButton("Withdraw", "button--destructive", () => withdrawNomination(known.id), "circle-minus"));
-  } else {
-    container.append(actionButton("Nominate", "button--constructive button--nominate", () => nominateResult(options.searchResult || show), "circle-plus"));
+  // Search retains nomination management; persistent catalogue cards show admin tools only.
+  if (options.searchResult) {
+    if (known?.currentUserNominated) {
+      container.append(actionButton("Withdraw", "button--destructive", () => withdrawNomination(known.id), "circle-minus"));
+    } else {
+      container.append(actionButton("Nominate", "button--constructive button--nominate", () => nominateResult(options.searchResult), "circle-plus"));
+    }
   }
 
   if (known?.id && appState.currentUser?.isAdmin) {
-    container.append(actionButton("Remove", "button--destructive", () => removeShow(known.id), "trash-2"));
+    const remove = document.createElement("button");
+    remove.className = "icon-button artwork-remove";
+    remove.type = "button";
+    remove.setAttribute("aria-label", `Remove ${show.title}`);
+    remove.title = "Remove show";
+    remove.innerHTML = '<i data-lucide="trash-2" aria-hidden="true"></i>';
+    remove.addEventListener("click", () => removeShow(known.id));
+    container.append(remove);
   }
-  const primary = document.createElement("div");
-  primary.className = "nomination-actions";
-  Array.from(container.children).slice(0, appState.currentUser?.isAdmin && !appState.demoMode ? 2 : 1).forEach((button) => primary.append(button));
-  container.prepend(primary);
   refreshIcons(container);
 }
 
@@ -919,8 +925,8 @@ function rankedCard(show, index) {
       <div class="show-meta">
       ${titleMarkup(show)}
       ${metadataMarkup(show)}
+      ${ratingStarsMarkup(show)}
     </div>
-    ${ratingStarsMarkup(show)}
     <div class="rank-controls" aria-label="Move ${escapeAttribute(show.title)}">
       <button class="icon-button" type="button" data-move="up" aria-label="Move up"><i data-lucide="arrow-up" aria-hidden="true"></i></button>
       <button class="icon-button" type="button" data-move="down" aria-label="Move down"><i data-lucide="arrow-down" aria-hidden="true"></i></button>
@@ -1393,7 +1399,8 @@ function metadataMarkup(show) {
     episodeCount ? formatEpisodeCount(show, episodeCount) : "",
     runtimeMinutes ? `Total Runtime: ${formatRuntime(runtimeMinutes)}` : ""
   ];
-  return `<div class="show-details" tabindex="0" aria-label="Show details">${rows.map((row) => `<p class="show-subtitle${row ? "" : " show-subtitle--placeholder"}">${row ? escapeHtml(row) : "&nbsp;"}</p>`).join("")}</div>`;
+  const subtitles = rows.map((row) => `<p class="show-subtitle${row ? "" : " show-subtitle--placeholder"}">${row ? escapeHtml(row) : "&nbsp;"}</p>`);
+  return `<div class="show-details" tabindex="0" aria-label="Show details"><div class="show-summary" tabindex="0" aria-label="Year, seasons and episodes">${subtitles.slice(0, 2).join("")}</div>${subtitles[2]}</div>`;
 }
 
 function ratingStarsMarkup(show) {

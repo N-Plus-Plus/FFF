@@ -20,19 +20,27 @@ const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  let selected = 'one', failDiscovery = false, empty = false, fanart = true;
+  let selected = 'one', failDiscovery = false, empty = false, fanart = true, admin = true;
+  let rankedIds = ['a','b'];
+  const mutations = [];
   const show = (id) => ({ id, imdb_id: id === 'a' ? 'tt90000001' : 'tt90000002', title: 'A deliberately long fictional television title for responsive verification', release_year: 2020, total_episode_count: 100, total_season_count: 5, total_runtime_minutes: 4000, tvmaze_rating: 8.5, card_art_type: fanart ? 'fanart-tvbanner' : 'banner', card_art_source_url: `${origin}/banner-${selected}.svg`, current_user_nominated: true });
   const board = () => ({ entries: empty ? [] : [{...show('a'), show_id:'a', ranked_count:2, is_confirmed:true}] });
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     assert.equal(url.origin, origin, 'No external provider access');
     if (url.pathname.startsWith('/banner-')) return route.fulfill({contentType:'image/svg+xml', body:'<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="185"><rect width="1000" height="185" fill="#a6bdcf"/><circle cx="950" cy="92" r="50" fill="#f90"/></svg>'});
-    if (url.pathname === '/auth/session') return route.fulfill({json:{current_user:{id:'test', is_admin:true}}});
+    if (url.pathname === '/auth/session') return route.fulfill({json:{current_user:{id:'test', is_admin:admin}}});
     if (!url.pathname.startsWith('/v1/')) return route.continue();
     let data = {};
-    if (url.pathname === '/v1/load') data = {current_user:{id:'test',display_name:'Fixture admin',is_admin:true},shows:[show('a'),show('b')],ranked:[show('a')],unranked:empty?[]:[show('b'),show('a')],board:board()};
+    if (url.pathname === '/v1/load') data = {current_user:{id:'test',display_name:'Fixture participant',is_admin:admin},shows:[show('a'),show('b')],ranked:rankedIds.map(show),unranked:empty?[]:[show('b'),show('a')],board:board()};
     if (url.pathname === '/v1/catalogue') data = {shows:[show('a'),show('b')]};
-    if (url.pathname === '/v1/order') data = {ranked:[show('a')],unranked:empty?[]:[show('b'),show('a')]};
+    if (url.pathname === '/v1/order') data = {ranked:rankedIds.map(show),unranked:empty?[]:[show('b'),show('a')]};
+    if (['/v1/nominate','/v1/withdraw','/v1/admin/remove','/v1/ranking'].includes(url.pathname)) mutations.push(url.pathname);
+    if (url.pathname === '/v1/ranking') {
+      rankedIds = route.request().postDataJSON().showIds;
+      data = {revision:2,updated_at:new Date().toISOString(),order:{ranked:rankedIds.map(show),unranked:[]}};
+    }
+    if (url.pathname === '/v1/metadata' && route.request().postDataJSON().action==='search') data = {results:[show('a'),{...show('c'),imdb_id:'tt90000003',current_user_nominated:false}]};
     if (url.pathname === '/v1/board') data = board();
     if (url.pathname === '/v1/admin/artwork') {
       const payload = route.request().postDataJSON();
@@ -62,6 +70,32 @@ try {
         assert(metric.gradient.includes('0.7') && metric.gradient.includes('20%') && metric.gradient.includes('40%'));
         assert(metric.controls.every(Boolean), `${width} ${tab} controls overflow: ${JSON.stringify(metric)}`);
       }
+      if (tab !== 'Rank') {
+        const lines = await panel.locator('article').evaluateAll(cards => cards.map(card => {
+          const nodes = [card.querySelector('.show-title'), ...card.querySelectorAll('.show-details .show-subtitle')];
+          const bounds = card.getBoundingClientRect();
+          return nodes.map(node => { const r=node.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,inside:r.top>=bounds.top&&r.bottom<=bounds.bottom}; });
+        }));
+        for (const line of lines) {
+          assert(line.every(part=>part.inside), `${width} ${tab} text clips: ${JSON.stringify(line)}`);
+          assert(line[0].bottom<=line[1].top+1);
+          if (width<=600) assert(Math.abs(line[1].top-line[2].top)<1, 'Mobile year and episodes share a line');
+          else assert(line[1].bottom<=line[2].top+1, 'Desktop year and episodes stack');
+          assert(line[2].bottom<=line[3].top+1, 'Runtime is the last line');
+        }
+      }
+      if (tab==='Nominate') {
+        assert.equal(await panel.getByRole('button',{name:/^(Nominate|Withdraw)$/}).count(),0);
+        const tools=await panel.locator('article').first().locator('.card-actions button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect(),c=getComputedStyle(b);return {width:r.width,height:r.height,top:r.top,background:c.backgroundColor,color:c.color,text:b.textContent.trim(),name:b.getAttribute('aria-label')};}));
+        assert.equal(tools.length,2);
+        assert.deepEqual(tools.map(t=>[t.width,t.height,t.top]),[ [32,32,tools[0].top], [32,32,tools[0].top] ]);
+        assert(tools.every(t=>t.background==='rgb(62, 71, 80)'&&t.color==='rgb(255, 255, 255)'&&t.text===''&&t.name));
+      }
+      if (tab==='List') {
+        assert.equal(await panel.locator('article').first().locator('.rank-controls button').count(),3);
+        assert(await panel.locator('.rank-controls button').evaluateAll(buttons=>buttons.every(b=>{const r=b.getBoundingClientRect();return r.width===32&&r.height===32&&getComputedStyle(b).backgroundColor==='rgb(62, 71, 80)';})));
+      }
+      if (tab!=='Rank' && [390,1440].includes(width)) await page.screenshot({path:`.wrangler/cards-${tab.toLowerCase()}-${width}.png`,fullPage:true});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     }
   }
@@ -77,8 +111,13 @@ try {
   await page.getByRole('tab',{name:'List',exact:true}).click();
   await page.screenshot({path:'.wrangler/artwork-list-mobile.png',fullPage:true});
   await page.getByRole('tab',{name:'Nominate',exact:true}).click();
-  assert.equal(await page.locator('.artwork-edit').first().evaluate(b=>getComputedStyle(b).color),'rgb(0, 0, 0)');
-  await page.locator('.artwork-edit').first().click();
+  assert.equal(await page.locator('.artwork-edit').first().evaluate(b=>getComputedStyle(b).color),'rgb(255, 255, 255)');
+  const editControl=page.locator('.artwork-edit').first();
+  await editControl.hover();
+  assert.equal(await editControl.evaluate(b=>getComputedStyle(b).backgroundColor),'rgb(45, 45, 45)');
+  await editControl.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+  assert.equal(await editControl.evaluate(b=>getComputedStyle(b).outlineStyle),'solid');
+  await page.keyboard.press('Enter');
   assert.equal(await page.locator('.artwork-dialog input').count(),0);
   const second=page.getByRole('button',{name:'Banner 2',exact:false});
   await second.focus(); await page.keyboard.press('Space');
@@ -105,7 +144,35 @@ try {
     await page.getByRole('tab',{name:tab === 'Rank' ? /^Rank/ : tab,exact:tab !== 'Rank'}).click();
     assert.equal(await page.locator('.panel.is-active .page-artwork-credit:visible').count(),0);
   }
+  fanart=true; empty=false;
+  await page.reload(); await page.getByRole('tab',{name:'List',exact:true}).click();
+  await page.locator('#rankedList article').first().getByRole('button',{name:'Move down'}).click();
+  await page.waitForFunction(()=>document.querySelector('#sequenceStatus').textContent==='Saved');
+  assert.deepEqual(rankedIds,['b','a']);
+  await page.locator('#rankedList article').last().getByRole('button',{name:'Move up'}).click();
+  await page.waitForFunction(()=>document.querySelector('#sequenceStatus').textContent==='Saved');
+  assert.deepEqual(rankedIds,['a','b']);
+  await page.locator('#rankedList article').last().getByRole('button',{name:'Remove from ranking'}).click();
+  await page.waitForFunction(()=>document.querySelector('#sequenceStatus').textContent==='Saved');
+  assert.deepEqual(rankedIds,['a']);
+  admin=false;
+  for (const width of [320,390,768,1440]) {
+    await page.setViewportSize({width,height:900}); await page.goto(origin);
+    await page.waitForFunction(()=>document.querySelector('#userBadge').textContent==='Fixture participant');
+    assert.equal(await page.locator('#catalogueList button').count(),0, 'Ordinary users have no persistent card actions');
+    await page.locator('#titleInput').fill('fictional');
+    await page.getByRole('button',{name:'Search',exact:true}).click();
+    await page.locator('#searchResults article').first().waitFor();
+    assert.equal(await page.locator('#searchResults').getByRole('button',{name:'Nominate',exact:true}).count(),1);
+    assert.equal(await page.locator('#searchResults').getByRole('button',{name:'Withdraw',exact:true}).count(),1);
+    assert.equal(await page.locator('#searchResults .artwork-edit, #searchResults .artwork-remove').count(),0);
+    assert(await page.locator('#searchResults article').evaluateAll(cards=>cards.every(card=>{
+      const r=card.getBoundingClientRect();
+      return Math.abs(r.width/r.height-200/37)<0.02 && [...card.querySelectorAll('.show-title, .show-subtitle')].every(node=>{const n=node.getBoundingClientRect();return n.top>=r.top&&n.bottom<=r.bottom;});
+    })), 'Search preserves nomination access and card layout');
+  }
+  assert(mutations.every(path=>path==='/v1/ranking'), 'No nominations or removals changed during layout checks');
   assert.deepEqual(errors,[]);
-  console.log('Artwork UI checks passed: 320/390/768/1440px, exact ratios, gradient layers, controls, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
+  console.log('Artwork UI checks passed: 320/390/768/1440px, stacked text, admin/ordinary permissions, matching controls, retained ranking actions, exact ratios, gradient layers, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 
