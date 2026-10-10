@@ -2,7 +2,7 @@ import { mkdir, copyFile, readdir, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 // Explicit allowlist: never publish the repository, exports, tooling or secrets.
-export const publicFiles = ["index.html", "login.html", "login.js", "bootstrap.js", "api.js", "style.css", "app.js", "config.js", "store.js", "providers.js", "ranking.js", "fav.png"];
+export const publicFiles = ["index.html", "login.html", "login.js", "bootstrap.js", "api.js", "style.css", "app.js", "config.js", "store.js", "providers.js", "ranking.js", "wire-wednesday.png"];
 const root = new URL("../../", import.meta.url);
 const destination = new URL("../public/", import.meta.url);
 await mkdir(destination, { recursive: true });
@@ -11,7 +11,7 @@ for (const entry of await readdir(destination, { withFileTypes: true })) {
   if (!entry.isFile()) throw new Error("Unexpected directory in generated public assets; inspect it manually.");
   if (!publicFiles.includes(entry.name)) await unlink(new URL(entry.name, destination));
 }
-for (const name of publicFiles) await copyFile(new URL(name, root), new URL(name, destination));
+for (const name of publicFiles) await copyFile(new URL(name === "wire-wednesday.png" ? "assets/wire-wednesday.png" : name, root), new URL(name, destination));
 const vendorFiles = {
   "lucide.min.js": "node_modules/lucide/dist/umd/lucide.min.js",
   "lucide-LICENSE.txt": "node_modules/lucide/LICENSE",

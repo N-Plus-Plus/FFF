@@ -37,7 +37,7 @@ try {
   assert.equal((await context.request.get(origin + "/artwork/invalid")).status(), 401);
   assert.equal((await context.request.post(origin + "/v1/load", { data: {}, headers: { Origin: origin } })).status(), 401);
   assert.equal((await context.request.get(origin + "/v1/unknown")).status(), 404);
-  for (const path of ["/app.js?v=123", "/style.css", "/fav.png", "/index.html?demo=1", "/vendor/lucide.min.js"]) {
+  for (const path of ["/app.js?v=123", "/style.css", "/wire-wednesday.png", "/index.html?demo=1", "/vendor/lucide.min.js"]) {
     assert.equal((await context.request.get(origin + path)).status(), 200, path);
   }
   assert.equal(externalScripts, 0);

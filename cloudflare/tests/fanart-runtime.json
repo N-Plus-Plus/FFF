@@ -1,0 +1,7 @@
+{
+  "name": "fanart-runtime-fixture",
+  "main": "fanart-runtime.worker.js",
+  "compatibility_date": "2026-09-19",
+  "workers_dev": false,
+  "preview_urls": false
+}

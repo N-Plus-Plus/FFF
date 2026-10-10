@@ -22,7 +22,7 @@ try {
     if (url.pathname === "/auth/challenge") return route.fulfill({ json: { nonce: "anonymous-presentation-only" } });
     if (url.pathname.startsWith("/auth/") || url.pathname.startsWith("/v1/")) return route.fulfill({ status: 401, json: { message: "Presentation review only." } });
     const name = url.pathname === "/" ? "login.html" : url.pathname.slice(1);
-    if (!["login.html", "login.js", "style.css", "fav.png"].includes(name) && !/^vendor\/lexend-deca-latin-(400|600|700|800)\.woff2$/.test(name)) return route.fulfill({ status: 404, body: "" });
+    if (!["login.html", "login.js", "style.css", "wire-wednesday.png"].includes(name) && !/^vendor\/lexend-deca-latin-(400|600|700|800)\.woff2$/.test(name)) return route.fulfill({ status: 404, body: "" });
     const type = name.endsWith(".html") ? "text/html" : name.endsWith(".js") ? "application/javascript" : name.endsWith(".css") ? "text/css" : name.endsWith(".woff2") ? "font/woff2" : "image/png";
     const response = await worker.fetch(new Request(url), { APP_ORIGIN: origin, ASSETS: { fetch: async () => new Response(await readFile(`cloudflare/public/${name}`), { headers: { "Content-Type": type } }) } });
     return route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });

@@ -162,6 +162,12 @@ Production configuration disables Workers observability ingestion; code does not
 
 The Google SDK is an intentional identity-provider trust dependency; it is not vendorable. Its execution is restricted to sign-in. Rate-limiting/WAF rules for public auth endpoints should be considered during the approved account review to protect D1 and Google verification capacity; no live rules are added here.
 
+## fanart failure diagnosis
+
+Discovery and image downloads use manual redirect handling: never follow a provider redirect or forward the API key to another host. The deployed compatibility configuration rejects `redirect: "error"` before network I/O; Node mocks do not reproduce this, so `cloudflare/tests/fanart-runtime.test.mjs` also runs both paths inside native workerd with synthetic I/O.
+
+A discovery failure emits only a fixed category, upstream HTTP status (or null before a response), and retry duration. Internal errors distinguish cached failures with an expiry timestamp; browser responses remain generic. Do not enable production observability/tailing or expose raw upstream exceptions, response bodies, request URLs or credentials to diagnose an issue. Existing `fanart_cache` rows retain only a failure flag, not the original error category. Read projected failure/expiry fields through operator-authorized SELECTs; do not purge or modify production caches without approval. Expired failures retry naturally after an approved patch, preserving existing artwork on failure. No schema change is required.
+
 ## Cron purpose and deployment implication
 
 `wrangler.jsonc` retains `0 2 * * 3`. The `scheduled` handler calls `refreshDueShows`: up to 25 active, non-removed shows whose last metadata success is at least seven days old are processed sequentially through TVmaze. It updates D1 metadata/revisions and can retain changed artwork in R2; upstream failures record a sanitized category. It is independent of interactive authentication and is not a weekly email reminder.

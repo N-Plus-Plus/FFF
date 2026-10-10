@@ -20,34 +20,50 @@ function suitable(body, id) {
   });
 }
 const pending = new WeakMap();
+const unavailable = (diagnostic) => Object.assign(fail(503, "fanart.tv is temporarily unavailable. Try again later."), { fanartDiagnostic: diagnostic });
 export async function banners(id, env) {
   if (!id) return [];
   if (!env.FANART_TV?.trim()) throw fail(503, "fanart.tv artwork is not configured. Contact the operator.");
   const cached = await env.DB.prepare("SELECT * FROM fanart_cache WHERE tvdb_id=?").bind(id).first();
   if (cached && cached.expires_at > Date.now()) {
-    if (cached.failure) throw fail(503, "fanart.tv is temporarily unavailable. Try again later.");
+    if (cached.failure) throw unavailable({ category: "cached_failure", expiresAt: cached.expires_at });
     return JSON.parse(cached.banners);
   }
   let requests = pending.get(env.DB);
   if (!requests) { requests = new Map(); pending.set(env.DB, requests); }
   if (requests.has(id)) return requests.get(id);
   const promise = (async () => {
+    let category = "transport_or_runtime", upstreamStatus = null;
     try {
       const response = await fetch(`https://webservice.fanart.tv/v3.2/tv/${id}`, {
-        headers: { "api-key": env.FANART_TV.trim(), accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(8000)
+        // workerd rejects redirect:"error". Manual mode never forwards credentials.
+        headers: { "api-key": env.FANART_TV.trim(), accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(8000)
       });
+      upstreamStatus = response.status;
       if (!response.ok && response.status !== 404) {
+        category = response.status >= 300 && response.status < 400 ? "redirect" : [401,403].includes(response.status) ? "credentials" : response.status === 429 ? "rate_limit" : "upstream_http";
         const retry = Number(response.headers.get("retry-after"));
         throw Object.assign(fail(503, "fanart.tv is temporarily unavailable. Try again later."), { retry: Number.isFinite(retry) ? Math.max(300, Math.min(retry, 86400)) : 300 });
       }
-      const result = response.status === 404 ? [] : suitable(await response.json(), id);
+      let result = [];
+      if (response.status !== 404) {
+        category = "invalid_json";
+        const body = await response.json();
+        category = "invalid_banner_list";
+        result = suitable(body, id);
+      }
+      category = "cache_write";
       await env.DB.prepare("INSERT INTO fanart_cache(tvdb_id,banners,expires_at,failure) VALUES(?,?,?,0) ON CONFLICT(tvdb_id) DO UPDATE SET banners=excluded.banners,expires_at=excluded.expires_at,failure=0")
         .bind(id, JSON.stringify(result), Date.now() + 86400000).run();
       return result;
     } catch (error) {
+      const retrySeconds = error.retry || 300;
+      const diagnostic = { category: error.name === "TimeoutError" ? "timeout" : category, upstreamStatus, retrySeconds };
+      // Fixed categories/status only: never log URLs, IDs, credentials, bodies or raw errors.
+      console.warn("fanart_discovery_failure", JSON.stringify(diagnostic));
       await env.DB.prepare("INSERT INTO fanart_cache(tvdb_id,banners,expires_at,failure) VALUES(?,'[]',?,1) ON CONFLICT(tvdb_id) DO UPDATE SET expires_at=excluded.expires_at,failure=1")
-        .bind(id, Date.now() + (error.retry || 300) * 1000).run();
-      throw fail(503, "fanart.tv is temporarily unavailable. Try again later.");
+        .bind(id, Date.now() + retrySeconds * 1000).run();
+      throw unavailable(diagnostic);
     }
   })();
   requests.set(id, promise);
@@ -58,7 +74,7 @@ async function retain(banner, id, env) {
   const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(banner.url)))].map((v) => v.toString(16).padStart(2,"0")).join("");
   const key = `card-art/fanart/${id}/${banner.id}-${digest}`;
   if (await env.ARTWORK.head(key)) return key;
-  const response = await fetch(banner.url, { headers: { accept: "image/jpeg,image/png,image/webp" }, redirect: "error", signal: AbortSignal.timeout(8000) });
+  const response = await fetch(banner.url, { headers: { accept: "image/jpeg,image/png,image/webp" }, redirect: "manual", signal: AbortSignal.timeout(8000) });
   const type = (response.headers.get("content-type") || "").split(";")[0].toLowerCase();
   if (!response.ok || !["image/jpeg","image/png","image/webp"].includes(type) || Number(response.headers.get("content-length") || 0) > 5242880) throw fail(503, "The banner could not be downloaded. Try again.");
   const reader = response.body.getReader(), chunks = []; let size = 0;

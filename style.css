@@ -117,11 +117,34 @@ svg {
 
 .app-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   margin: 0 auto 1rem;
   width: min(100%, 680px);
+}
+
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.site-logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.app-header .site-brand {
+  flex: 1 1 200px;
+}
+
+.app-header .user-controls {
+  margin-left: auto;
 }
 
 .eyebrow {

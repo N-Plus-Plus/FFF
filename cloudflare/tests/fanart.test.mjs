@@ -22,7 +22,7 @@ const origin=`http://127.0.0.1:${server.address().port}`;
 try {
   test=await fixture(origin);
   const {env,request,signIn}=test; env.FANART_TV="synthetic-only-key";
-  let calls=0, downloads=0, mode="ok", downloadFailure=false;
+  let calls=0, downloads=0, mode="ok", downloadFailure=false, downloadRedirect=false;
   const image=(id,width=1000,height=185,url=`https://assets.fanart.tv/fanart/tv/123/tvbanner/banner-${id}.png`)=>({id:String(id),url,width:String(width),height:String(height),lang:"en"});
   let choices=[image(1,1920,1080),image(2),image(3),image(4,1000,185,"https://untrusted.example/image.jpg"),image(2)];
   // A real PNG fixture for browser loading, never an external request.
@@ -36,11 +36,18 @@ try {
     }
     if(url.origin==="https://webservice.fanart.tv") {
       calls++; assert.equal(url.pathname,"/v3.2/tv/123"); assert.equal(url.search,""); assert.equal(options.headers["api-key"],env.FANART_TV);
+      assert.equal(options.redirect,"manual","Never follow provider redirects or use workerd's unsupported error mode");
+      if(mode==="transport") throw new TypeError("Synthetic private request detail");
+      if(mode==="invalid-json") return new Response("private invalid JSON");
+      if(mode==="401") return new Response("private credential error",{status:401});
+      if(mode==="302") return new Response(null,{status:302,headers:{Location:"https://untrusted.example"}});
       if(mode==="429") return new Response("private upstream error",{status:429,headers:{"Retry-After":"600"}});
       if(mode==="404") return new Response(null,{status:404});
       return Response.json({thetvdb_id:mode==="wrong-id"?"999":"123",...(mode==="absent"?{}:{tvbanner:choices})});
     }
     if(url.origin==="https://assets.fanart.tv" || url.origin==="https://fixture.test") {
+      if(url.origin==="https://assets.fanart.tv") assert.equal(options.redirect,"manual");
+      if(downloadRedirect) return new Response(null,{status:302,headers:{Location:"https://untrusted.example/private"}});
       downloads++; return downloadFailure?new Response("fail",{status:500}):new Response(png,{headers:{"content-type":"image/png"}});
     }
     throw new Error("Unexpected network access");
@@ -71,6 +78,10 @@ try {
   assert.equal((await api("/v1/admin/artwork",admin,{action:"save",imdbId:"tt90000001",bannerId:"3"})).status,503);
   assert.deepEqual(await env.DB.prepare("SELECT * FROM shows WHERE id=?").bind(showId).first(),before,"Failed save is not a success");
   downloadFailure=false;
+  downloadRedirect=true;
+  assert.equal((await api("/v1/admin/artwork",admin,{action:"save",imdbId:"tt90000001",bannerId:"3"})).status,503);
+  assert.deepEqual(await env.DB.prepare("SELECT * FROM shows WHERE id=?").bind(showId).first(),before,"Redirected downloads preserve existing artwork and show data");
+  downloadRedirect=false;
   assert.equal((await api("/v1/admin/artwork",admin,{action:"save",imdbId:"tt90000001",bannerId:"3"})).status,200);
   const manual=await env.DB.prepare("SELECT * FROM shows WHERE id=?").bind(showId).first();
   assert.equal(manual.fanart_banner_id,"3");assert.equal(manual.card_art_manual,1);
@@ -101,6 +112,33 @@ try {
   mode="429";await env.DB.prepare("DELETE FROM fanart_cache").run();await assert.rejects(()=>banners("123",env),/unavailable/);
   const rateCalls=calls;await assert.rejects(()=>banners("123",env),/unavailable/);assert.equal(calls,rateCalls);
   assert((await env.DB.prepare("SELECT expires_at FROM fanart_cache").first()).expires_at>Date.now()+590000,"Retry-After respected");
+  const warnings=[], originalWarn=console.warn;
+  console.warn=(...args)=>warnings.push(args);
+  try { for(const [failureMode,category,status] of [["transport","transport_or_runtime",null],["invalid-json","invalid_json",200],["401","credentials",401],["302","redirect",302],["wrong-id","invalid_banner_list",200]]) {
+    mode=failureMode; await env.DB.prepare("DELETE FROM fanart_cache").run();
+    await assert.rejects(()=>banners("123",env),error=>{
+      assert.deepEqual(error.fanartDiagnostic,{category,upstreamStatus:status,retrySeconds:300});
+      assert(!JSON.stringify(error).includes(env.FANART_TV));
+      assert(!JSON.stringify(error).includes("private"));
+      return true;
+    });
+    const failureCalls=calls;
+    await assert.rejects(()=>banners("123",env),error=>error.fanartDiagnostic.category==="cached_failure");
+    assert.equal(calls,failureCalls,"Cached failures do not contact upstream");
+    const denied=await api("/v1/admin/artwork",admin,{imdbId:"tt90000001"});
+    assert.equal(denied.status,503);
+    assert.deepEqual(await denied.json(),{message:"fanart.tv is temporarily unavailable. Try again later."},"Internal diagnostics never enter browser responses");
+  } } finally { console.warn=originalWarn; }
+  assert.equal(warnings.length,5,"Only new failures log diagnostics, never cached retries");
+  for(const [event,payload] of warnings) {
+    assert.equal(event,"fanart_discovery_failure");
+    assert.deepEqual(Object.keys(JSON.parse(payload)),["category","upstreamStatus","retrySeconds"]);
+    assert(!payload.includes(env.FANART_TV)&&!payload.includes("private")&&!payload.includes("https://"));
+  }
+  mode="ok";choices=[image(2),image(3)];
+  await env.DB.prepare("UPDATE fanart_cache SET expires_at=?").bind(Date.now()-1).run();
+  assert.equal((await banners("123",env)).length,2,"Expired negative cache recovers without a purge");
+  assert.equal((await env.DB.prepare("SELECT failure FROM fanart_cache").first()).failure,0);
   mode="ok";choices=[image(2),image(3)];await env.DB.prepare("DELETE FROM fanart_cache").run();
   const auditItems=[{showId:fallback.id,imdbId:"tt90000002"}];
   assert.equal((await (await api("/v1/metadata",admin,{action:"verify-backgrounds",items:auditItems})).json()).updatedCount,1,"Existing fallback adopts preferred artwork");
