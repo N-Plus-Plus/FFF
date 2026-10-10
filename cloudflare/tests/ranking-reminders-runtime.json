@@ -1,0 +1,8 @@
+{
+  "name": "ranking-reminders-runtime-fixture",
+  "main": "ranking-reminders-runtime.worker.js",
+  "compatibility_date": "2026-09-19",
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["sender@example.test"], "remote": false }]
+}

@@ -9,7 +9,8 @@
     "jose": "6.2.12"
   },
   "scripts": {
-    "test": "node scripts/verify-contracts.mjs && node cloudflare/tests/session-hash.test.mjs && node cloudflare/tests/hosting.test.mjs && node cloudflare/tests/preapproval.test.mjs && node cloudflare/tests/auth-browser.test.mjs && node cloudflare/tests/fanart-runtime.test.mjs && node cloudflare/tests/fanart.test.mjs && node cloudflare/tests/metadata.test.mjs",
+    "test": "node scripts/verify-contracts.mjs && node cloudflare/tests/session-hash.test.mjs && node cloudflare/tests/hosting.test.mjs && node cloudflare/tests/preapproval.test.mjs && node cloudflare/tests/auth-browser.test.mjs && node cloudflare/tests/fanart-runtime.test.mjs && node cloudflare/tests/fanart.test.mjs && node cloudflare/tests/metadata.test.mjs && npm run test:reminders",
+    "test:reminders": "node cloudflare/tests/ranking-reminders.test.mjs && node cloudflare/tests/ranking-reminders-runtime.test.mjs",
     "test:browser": "node scripts/hosting-browser-test.mjs && node scripts/placement-browser-test.mjs",
     "build": "node cloudflare/scripts/prepare-assets.mjs",
     "deploy:dry-run": "wrangler deploy --dry-run --outdir .wrangler/hosting-dry-run",

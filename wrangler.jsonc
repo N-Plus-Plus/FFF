@@ -13,9 +13,11 @@
     "migrations_dir": "cloudflare/migrations"
   }],
   "r2_buckets": [{ "binding": "ARTWORK", "bucket_name": "fff-artwork" }],
-  "triggers": { "crons": ["0 2 * * 3"] },
+  "send_email": [{ "name": "RANKING_EMAIL", "allowed_sender_addresses": ["troy@nissen.nexus"], "remote": false }],
+  "triggers": { "crons": ["0 2 * * 3", "0 1 * * 3"] },
   "vars": {
-    "APP_ORIGIN": "https://wirewednesday.nissen.nexus"
+    "APP_ORIGIN": "https://wirewednesday.nissen.nexus",
+    "RANKING_REMINDERS_ENABLED": "false"
   },
   "routes": [
     {

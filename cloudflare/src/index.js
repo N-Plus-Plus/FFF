@@ -1,5 +1,7 @@
 import { preferBanner, bannerOptions, saveBanner, bannerPreview } from "./fanart.js";
 import { authenticate, authRoute, appOrigin, sameOrigin, localDemo } from "./google-auth.js";
+import { ACTIVE_SHOW_SQL } from "./show-visibility.js";
+import { sendRankingReminders } from "./ranking-reminders.js";
 
 const TVMAZE = "https://api.tvmaze.com";
 const json = (body, status = 200) => Response.json(body, { status });
@@ -29,7 +31,11 @@ export function createWorker({ verifyGoogle } = {}) { return {
     if (new URL(request.url).protocol === "https:") secured.headers.set("Strict-Transport-Security", "max-age=31536000");
     return secured;
   },
-  async scheduled(event, env, ctx) { ctx.waitUntil(refreshDueShows(env)); }
+  async scheduled(event, env, ctx) {
+    // Keep metadata at its existing UTC time; the extra 01:00 event is email-only.
+    if (!event.cron || event.cron === "0 2 * * 3") ctx.waitUntil(refreshDueShows(env));
+    if (event.cron === "0 1 * * 3" || event.cron === "0 2 * * 3") ctx.waitUntil(sendRankingReminders(event, env));
+  }
 }; }
 export default createWorker();
 
@@ -99,7 +105,7 @@ async function handleRequest(request, env, verifyGoogle) {
 }
 
 const http = (status, message) => Object.assign(new Error(message), { status });
-async function activeShows(db) { return (await db.prepare("SELECT s.* FROM shows s WHERE s.admin_removed_at IS NULL AND EXISTS (SELECT 1 FROM show_nominations n WHERE n.show_id=s.id AND n.withdrawn_at IS NULL) ORDER BY s.created_at,s.title").all()).results; }
+async function activeShows(db) { return (await db.prepare(`SELECT s.* FROM shows s WHERE ${ACTIVE_SHOW_SQL} ORDER BY s.created_at,s.title`).all()).results; }
 async function showJson(show, user, db) {
   const nominated = !!await db.prepare("SELECT 1 FROM show_nominations WHERE user_id=? AND show_id=? AND withdrawn_at IS NULL").bind(user.id, show.id).first();
   const count = await db.prepare("SELECT count(*) AS n FROM show_nominations WHERE show_id=? AND withdrawn_at IS NULL").bind(show.id).first();
