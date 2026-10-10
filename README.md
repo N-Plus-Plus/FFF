@@ -4,7 +4,9 @@ A mobile-first shared TV catalogue, private participant orders, and a strict agg
 
 ## Access and privacy
 
-Google sign-in completely replaces participant links. Only an active existing participant with an enabled, explicit Google-subject mapping can access the application, its modules, artwork or data. No public registration, automatic participant creation, email-only matching, legacy-link fallback, cross-origin API access or browser-supplied actor IDs exist. Historical link columns remain inert in D1 to avoid destructive schema rebuilding.
+Google sign-in completely replaces participant links. An operator can pre-approve each known Google email against an exact existing participant ID in D1 before launch. The first valid Gmail/Google Workspace sign-in atomically binds that participant to Google's stable `sub` and consumes the pre-approval. Future authentication uses only the established `sub`, even if the email changes. Other Google accounts need the existing operator-reviewed subject approval because Google is not authoritative for their current mailbox ownership. OAuth Test User status alone never grants Wire Wednesday access.
+
+Only active existing participants with enabled subject mappings can access the application, its modules, artwork or data. Unknown accounts are rejected. No public registration, automatic participant creation, automatic identity reassignment, legacy-link fallback, cross-origin API access or browser-supplied actor IDs exist. Approval emails and mappings remain server-side in D1, absent from frontend assets and public responses. Emails use exact trim/lowercase comparison, without alias or dot rewriting; no hashing secret is added to the existing D1-only approval model. Historical link columns remain inert in D1 to avoid destructive schema rebuilding. See the [initial setup procedure](cloudflare/DEPLOYMENT.md#establishing-and-maintaining-participant-mappings) for a four-participant pre-approval template, revocation and recovery.
 
 Google credentials are verified server-side with `jose`, including signature, issuer, audience, expiry, verified email and a single-use browser-bound nonce. The anonymous sign-in page uses Google's official responsive `outline_dark` button following CanBan's current `frontend/SignIn.tsx`. Its Google SDK is the sole external script allowed on that document. The authenticated app uses locally packaged Lucide and Lexend Deca, with no external scripts. Existing fonts/icons retain their visual system.
 
@@ -83,6 +85,7 @@ node scripts/verify-contracts.mjs
 node cloudflare/tests/session-hash.test.mjs
 node cloudflare/tests/hosting.test.mjs
 node cloudflare/tests/auth-browser.test.mjs
+node cloudflare/tests/preapproval.test.mjs
 node cloudflare/tests/fanart.test.mjs
 ```
 
@@ -90,6 +93,6 @@ The auth tests self-host local Worker handlers with disposable local D1/R2, sign
 
 ## Operations and deployment
 
-See [cloudflare/DEPLOYMENT.md](cloudflare/DEPLOYMENT.md) for Google setup, operator-only mapping review, forward migration, cutover, verification and rollback. Establish mappings before announcing sign-in availability. GitHub Pages and workers.dev can be retired during the approved cutover; old credentials have no meaning in the new application.
+See [cloudflare/DEPLOYMENT.md](cloudflare/DEPLOYMENT.md) for Google setup, operator-only pre-approval/mapping review, forward migration, cutover, verification and rollback. Establish pre-approvals before announcing sign-in availability; no prior participant sign-in is needed for Gmail/Workspace accounts. Third-party email accounts require reviewed subject mappings. GitHub Pages and workers.dev can be retired during the approved cutover; old credentials have no meaning in the new application.
 
 `wrangler.jsonc` retains `0 2 * * 3` for weekly TVmaze metadata refresh. Its live status is unconfirmed because it is not currently visible in Cloudflare. Deployment can register this trigger and enable future scheduled D1/R2 writes; approve that explicitly. This is not an ordering-reminder schedule. The retained Supabase source is historical and must not be deployed as an alternate authentication path. Any historical reminder service must have its participant-link content retired or replaced with the plain canonical sign-in URL before cutover; whether to keep/rework that service requires operator review.

@@ -36,28 +36,82 @@ Provide fanart.tv attribution and CC BY 3.0 links in the picker, plus source/cre
 
 ## Establishing and maintaining participant mappings
 
-Only an operator with controlled D1 access may approve mappings; there is no browser admin mapping endpoint. Existing participant `is_admin` still controls show removal, not identity administration. Bootstrap does not require an already signed-in administrator.
+Only an operator with trusted D1 access can establish approvals. There is no application/API approval endpoint, and app administrator status cannot manage identities. Being listed in the Google OAuth consent application's **Test Users** permits Google's test-mode sign-in; it does not grant Wire Wednesday access or prove which FFF participant owns the account.
 
-1. Before announcing access, have each intended participant use Google sign-in once in the controlled setup window. A valid but unapproved identity is refused access and recorded in `auth_requests` with its verified Google subject, email and timestamp. It creates no participant or session. Requests older than 30 days are ineligible and cleaned on later requests.
-2. Privately inspect `SELECT id,display_name,is_active,is_admin FROM app_users` and `SELECT id,google_sub,verified_email,requested_at FROM auth_requests` in the trusted operator console. Confirm the person, Google account and intended existing participant out of band. Never approve by display-name similarity, an unverified email message, or an arbitrary browser-supplied participant ID. A valid Google identity does not establish who owns an existing ranking history; operator review is essential.
-3. Create ignored `cloudflare/private-google-mapping.json`. For approval it contains `action: "approve"`, `participantId`, exact `expectedName`, verified `requestId`, exact `verifiedEmail`, and a meaningful `note`. No Google credential or session value belongs in that file. Generate a reviewable private SQL file:
+### Initial pre-approval for the four known participants
 
-```powershell
-node cloudflare/scripts/prepare-google-mapping.mjs cloudflare/private-google-mapping.json cloudflare/private-google-mapping.sql
+1. In a separately approved production setup, apply forward migration `0006_google_preapprovals.sql` before deploying this authentication code. It adds only the `participant_google_preapprovals` table and guards/consumption triggers. It neither changes participant IDs, nominations or rankings nor recreates existing mapping/session tables. Local tests apply it to disposable D1 only. Review all pending migrations and existing tracking; never reset/import/replay baseline data.
+2. Privately inspect `SELECT id,display_name,is_active,is_admin FROM app_users` in the trusted D1 console. Confirm each known person, current Google account and **existing participant ID** out of band. Inspect `participant_google_auth` for existing mappings first. Existing subjects must use the recovery procedure below, not another pre-approval. Do not match by display-name similarity or create participants.
+3. Enter the following single INSERT directly in the trusted D1 console, replacing **all fictional values there** with the four confirmed IDs, exact display names and exact Google emails. Use this as an operator-reviewed template; do not run it unchanged. It is atomic: a missing/inactive participant, mismatched name or duplicate email/participant fails the whole statement. Existing mapped participants/emails are rejected. Trim/lowercase only; do not rewrite Gmail dots, plus aliases or hosted-domain names. Escape SQL literal single quotes by doubling them.
+
+```sql
+INSERT INTO participant_google_preapprovals
+  (user_id, approved_email, enabled, approved_at, approval_note)
+VALUES
+  ((SELECT id FROM app_users WHERE id='fictional-participant-1' AND display_name='Fictional One' AND is_active=1),
+   lower(trim('one@example.test')), 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Operator confirmed initial account'),
+  ((SELECT id FROM app_users WHERE id='fictional-participant-2' AND display_name='Fictional Two' AND is_active=1),
+   lower(trim('two@example.test')), 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Operator confirmed initial account'),
+  ((SELECT id FROM app_users WHERE id='fictional-participant-3' AND display_name='Fictional Three' AND is_active=1),
+   lower(trim('three@example.test')), 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Operator confirmed initial account'),
+  ((SELECT id FROM app_users WHERE id='fictional-participant-4' AND display_name='Fictional Four' AND is_active=1),
+   lower(trim('four@example.test')), 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Operator confirmed initial account')
+RETURNING user_id, enabled;
 ```
 
-The generator contacts no database, refuses output overwrites and requires ignored workspace paths. SQL requires an existing participant with the exact expected name and a recent verified request/email. Unique subject/email constraints prevent aliases across participants. A typo or mismatched request fails, preserving records. Review the proposed assignment carefully before applying.
+4. Require four returned participant IDs and privately verify the D1 associations. Real addresses and mappings belong only in D1: do not put them in chat, source, migrations, `.env.vars`, frontend configuration, command-line arguments, local JSON/SQL files, logs or public query results. No real mappings ship with this repository. The existing private SQL generator remains useful for fictional local fixtures; use the trusted D1 console for real operator approvals/recovery.
+5. No sign-in request or Google `sub` is needed in advance. At first sign-in, the Worker verifies Google's signature, issuer, audience, expiry, verified email and browser-bound single-use nonce before matching the exact pre-approved email. Automatic email claiming requires Google to be authoritative: `@gmail.com`, or a verified Workspace account with a signed nonempty `hd` claim. Four fictional `example.test` Workspace accounts are used in tests; those addresses alone are not real Google-hosted accounts. [Google explains why third-party mailbox accounts need additional identity review](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token). The Worker detects this from the signed token; Test User status does not establish account type.
+6. The single INSERT binds the existing participant to the verified stable `sub`. Its D1 trigger marks the pre-approval consumed in the same atomic operation. Simultaneous first attempts cannot claim the email twice. No existing subject, email or participant mapping is overwritten, including disabled mappings. Future logins use only the established `sub`, so a changed email cannot reassign identity or take over another participant. Unknown accounts stay denied. The normal session response contains no email, subject or pre-approval data.
 
-4. With separate approval, apply the reviewed file using `npx.cmd wrangler d1 execute DB --remote --file cloudflare/private-google-mapping.sql`. Require exactly one returned participant row; zero returned rows means no mapping was changed. Privately verify `user_id`, subject and enabled status. Do not publish raw query output.
-5. To replace an existing mapping or re-enable it, include `previousSubject` equal to its currently approved Google subject and submit a fresh verified request. Without the matching previous subject, an existing mapping is not overwritten. To withdraw approval use `action: "disable"`, the existing participant ID, exact name and note. Updates/deletions invalidate that participant's sessions and advance Board revision while preserving history. Removing approval removes them from the confirmation denominator; their retained ballot still contributes.
+The table reserves first-use access; only bound enabled subject mappings count toward the existing Board active-user/confirmation denominator. Claiming approvals changes authentication/revision state only, not any participant's ballot or nominations. A disabled/inactive participant cannot claim access.
 
-No tool can infer a person's rightful participant record from a Google account. Human verification of the mapping remains a required deployment gate. Map every intended active participant before general launch.
+### Pending corrections, revocation and privacy decision
+
+Before first use, an operator can correct an unclaimed email or disable its pending approval in D1. For example, `UPDATE participant_google_preapprovals SET enabled=0 WHERE user_id='fictional-participant-1' AND claimed_at IS NULL;`. Claimed emails/participant IDs cannot be rewritten or reset to unclaimed. Deleting a bound mapping does not reopen its consumed pre-approval.
+
+After binding, revoke access by setting `participant_google_auth.enabled=0` for the exact participant ID; changing the pre-approval's enabled flag has no effect on established access. Existing mapping triggers invalidate sessions and advance Board revision. Deactivation also blocks sessions. Retained ballots still contribute; only the confirmation denominator changes. Do not delete/recreate participant records or alter rankings to recover an account.
+
+Approval emails remain plaintext **only in protected D1 tables**, as in the existing subject approval/request mechanism. Keyed hashing of only the pre-approval table would leave emails in the existing mapping/request tables, provide little additional protection and introduce another secret with rotation/recovery requirements. No additional hashing secret is introduced. Sessions remain opaque and hashed as before; credentials are not stored or logged. Protect database access, backups and provider/account logging with the existing deployment privacy gates.
+
+### Third-party Google accounts and explicit account recovery
+
+For a Google account whose email is neither Gmail nor covered by Google's signed Workspace `hd`, automatic email-only claiming is refused even with `email_verified=true`. Have the intended person sign in during the controlled setup window: the valid but denied account is recorded in `auth_requests` only in D1. Independently confirm their current account ownership and exact request `google_sub` out of band. Then create the subject mapping in the trusted D1 console using the verified request (no prior mapping may exist):
+
+```sql
+INSERT INTO participant_google_auth
+  (user_id, google_sub, approved_email, enabled, approved_at, approval_note)
+VALUES
+  ((SELECT id FROM app_users WHERE id='fictional-participant-1' AND display_name='Fictional One' AND is_active=1),
+   (SELECT google_sub FROM auth_requests WHERE id='fictional-request-id'
+      AND verified_email=lower(trim('one@example.test'))
+      AND requested_at>strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')),
+   lower(trim('one@example.test')), 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'Operator independently verified account ownership')
+RETURNING user_id, enabled;
+```
+
+Require exactly one returned participant ID. Invalid participants/requests fail through NOT NULL/FK constraints; unique subject/email constraints prevent cross-participant assignments. First insertion also consumes any pending pre-approval for this participant, including disabled pending rows. The person can then sign in using their bound subject. Unknown accounts are never approved merely because they submitted a request. Requests older than 30 days are ineligible and cleaned on subsequent denied sign-ins.
+
+For recovery/replacement or re-enabling a bound account, verify a fresh request and explicitly compare its participant's **current subject**. Use this guarded console update, replacing fictional values after operator review:
+
+```sql
+UPDATE participant_google_auth
+SET google_sub=(SELECT google_sub FROM auth_requests WHERE id='fictional-new-request-id'
+      AND verified_email=lower(trim('replacement@example.test'))
+      AND requested_at>strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')),
+    approved_email=lower(trim('replacement@example.test')), enabled=1,
+    approved_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), approval_note='Operator verified account recovery'
+WHERE user_id=(SELECT id FROM app_users WHERE id='fictional-participant-1' AND display_name='Fictional One')
+  AND google_sub='fictional-expected-current-sub'
+RETURNING user_id, enabled;
+```
+
+Require exactly one returned participant ID; zero rows means no change. A missing/mismatched verified request fails, and unique constraints still prevent assigning another participant's subject/email. An update invalidates old sessions. The consumed original pre-approval stays consumed. Never reset it or let ordinary login replace the subject. Human verification remains the deployment gate for all initial mappings and account recovery.
 
 ## Local verification
 
-Run syntax checks, `node scripts/verify-contracts.mjs`, `node cloudflare/tests/session-hash.test.mjs`, `node cloudflare/tests/hosting.test.mjs`, and `node cloudflare/tests/auth-browser.test.mjs`. With local Wrangler running, run `node scripts/hosting-browser-test.mjs` and `node scripts/placement-browser-test.mjs`. Finally run `npx.cmd wrangler deploy --dry-run --outdir .wrangler/hosting-dry-run` without the local environment file.
+Run syntax checks, `node scripts/verify-contracts.mjs`, `node cloudflare/tests/session-hash.test.mjs`, `node cloudflare/tests/hosting.test.mjs`, `node cloudflare/tests/auth-browser.test.mjs`, and `node cloudflare/tests/preapproval.test.mjs`. With local Wrangler running, run `node scripts/hosting-browser-test.mjs` and `node scripts/placement-browser-test.mjs`. Finally run `npx.cmd wrangler deploy --dry-run --outdir .wrangler/hosting-dry-run` without the local environment file.
 
-Mock tests cover signed Google claims, denied approval, incorrect/duplicate mappings, impersonation attempts, same-origin protection, remembered and short sessions, expiry/revocation/logout, private assets/artwork, nominations and rankings. Optional `node scripts/review-google-button.mjs` follows CanBan's current review script using local bytes and the public SDK in anonymous Chromium, checking official `outline_dark` presentation/resizing. It never contacts the deployed Worker or signs in. Personalised Google rendering and a real approved sign-in require manual acceptance after setup.
+Mock tests also cover four pre-approved fictional identities, atomic first-use binding, concurrent claims, Gmail/Workspace authority, third-party review, stable-sub login after email change, consumed/disabled approvals, existing-data preservation and approval privacy. Existing mock tests cover signed Google claims, denied approval, incorrect/duplicate mappings, impersonation attempts, same-origin protection, remembered and short sessions, expiry/revocation/logout, private assets/artwork, nominations and rankings. Optional `node scripts/review-google-button.mjs` follows CanBan's current review script using local bytes and the public SDK in anonymous Chromium, checking official `outline_dark` presentation/resizing. It never contacts the deployed Worker or signs in. Personalised Google rendering and a real approved sign-in require manual acceptance after setup.
 
 Browser tests also cover logout across tabs; `X-WW-Participant` only detects a stale displayed identity and never selects an actor. A mismatch returns `409 SESSION_CHANGED` before writes. Only one sign-in challenge is pending per browser; if another sign-in tab replaces it, retry obtains a fresh nonce. Google popup cancellation leaves the user on the sign-in page to retry.
 
@@ -78,9 +132,9 @@ The trigger is not currently visible in Cloudflare; do not describe it as deploy
 ## Production cutover â€” separate approval required
 
 1. Agree on a controlled access window. Record current deployment/settings, DNS, triggers and resource bindings; establish an approved private D1 recovery/export point. Confirm the existing `fff` database ID, `fff-artwork` bucket, zone ownership and certificate readiness. Stop on conflicting DNS rather than replacing it implicitly. Complete logging/cache/R2-public-access review and confirm the Cron decision.
-2. Confirm Google origin/consent configuration and set the client ID through the approved helper above. Review migration history read-only. If existing baseline schema is present but `0001`â€“`0003` appear pending, stop and reconcile tracking under separate approval rather than replaying their SQL. Once the baseline is confirmed, approve and apply pending `0004` with `npx.cmd wrangler d1 migrations apply DB --remote`; verify participant/data counts and IDs are unchanged. Never import/reset/recreate resources.
+2. Confirm Google origin/consent configuration and set the client ID through the approved helper above. Review migration history read-only. If existing baseline schema is present but `0001`â€“`0003` appear pending, stop and reconcile tracking under separate approval rather than replaying their SQL. Once the baseline is confirmed, approve and apply the pending forward migrations (including `0004` authentication and `0006` pre-approvals) with `npx.cmd wrangler d1 migrations apply DB --remote`; verify participant/data counts and IDs are unchanged. Never import/reset/recreate resources.
 3. Re-run local verification and dry-run, then, with deployment/DNS/Cron approval, run `npx.cmd wrangler deploy`. This updates the existing Worker/assets and domain, disables workers.dev, and can register the configured Cron. During this controlled setup window, all unmapped identities are denied. No old participant link is accepted.
-4. Collect verified approval requests and apply/review every intended mapping as described above. Confirm the administrator maps to the existing admin participant. Do this before announcing general sign-in availability. If verified subjects are already known from a trusted operator-owned application, still verify ownership; use the request-based procedure rather than copying arbitrary email matches.
+4. Establish the four reviewed D1 pre-approvals before announcing general sign-in availability, as described above. Confirm the administrator is associated with the existing admin participant ID. Gmail/Workspace accounts bind their subject on first sign-in. For third-party email accounts, collect and independently review verified subject requests during the controlled setup window. Existing mappings require explicit recovery, not pre-approval or automatic reassignment.
 5. Verify HTTPS, anonymous login, official button/popup, authenticated root/modules, invalid credentials/denied accounts, session persistence, logout and private artwork; confirm old links and actor overrides cannot authenticate. Privately verify each participant sees their existing order/history. Production mutation tests require specific approval and controlled cleanup. Confirm scheduled settings without firing metadata refresh manually.
 6. Retire GitHub Pages during the approved cutover or publish an approved plain canonical-URL landing page. Do not preserve `u` query parameters in any redirect. Remove obsolete participant links from messages/bookmarks and historical reminder configuration. Retire old public Supabase bearer RPC/Edge access if still reachable; this requires explicit separate Supabase approval and must preserve its data. No production backend may remain advertised as an alternate login path.
 

@@ -61,7 +61,12 @@ export function createGoogleVerifier(jwks = keys) {
           payload.email_verified !== true || payload.nonce !== nonce ||
           typeof payload.iat !== "number" || payload.iat > Date.now() / 1000 + 60 ||
           (payload.azp !== undefined && payload.azp !== audience)) throw authError(401, "Google sign-in could not be verified.");
-      return { sub: payload.sub, email: payload.email.trim().toLowerCase() };
+      const email = payload.email.trim().toLowerCase();
+      // email_verified alone is insufficient for first-use email matching on
+      // third-party mailboxes. Such accounts need the existing operator sub review.
+      const authoritativeEmail = email.endsWith("@gmail.com") ||
+        (typeof payload.hd === "string" && !!payload.hd.trim());
+      return { sub: payload.sub, email, authoritativeEmail };
     } catch (error) {
       if (error.status) throw error;
       if (error instanceof errors.JOSEError && !(error instanceof errors.JWKSTimeout) && !(error instanceof errors.JWKSInvalid)) {
@@ -90,6 +95,18 @@ async function challenge(request, env) {
   response.headers.append("Set-Cookie", cookie(env, "session", "", 0));
   return response;
 }
+async function claimPreapproval(identity, env) {
+  if (!identity.authoritativeEmail) return;
+  // One INSERT and its consumption trigger are atomic. Competing first sign-ins
+  // can only create one unique mapping; nothing here updates an existing one.
+  await env.DB.prepare(`INSERT INTO participant_google_auth(user_id,google_sub,approved_email,enabled,approved_at,approval_note)
+      SELECT p.user_id,?,p.approved_email,1,p.approved_at,p.approval_note
+      FROM participant_google_preapprovals p JOIN app_users u ON u.id=p.user_id
+      WHERE p.approved_email=? AND p.enabled=1 AND p.claimed_at IS NULL AND u.is_active=1
+        AND NOT EXISTS(SELECT 1 FROM participant_google_auth a
+          WHERE a.user_id=p.user_id OR a.google_sub=? OR a.approved_email=p.approved_email)
+      ON CONFLICT DO NOTHING`).bind(identity.sub, identity.email, identity.sub).run();
+}
 async function login(request, env, verify) {
   sameOrigin(request, env); configured(env);
   if (!(request.headers.get("Content-Type") || "").startsWith("application/json")) throw authError(415, "Use JSON for sign-in.");
@@ -104,8 +121,13 @@ async function login(request, env, verify) {
   const flow = await env.DB.prepare("DELETE FROM auth_flows WHERE state_hash=? RETURNING *").bind(await sha256LowerHex(state)).first();
   if (!flow || flow.expires_at <= instant()) throw authError(401, "Sign-in expired. Please try again.");
   const identity = await verify(input.credential, env.GOOGLE_CLIENT_ID, flow.nonce);
-  const mapping = await env.DB.prepare(`SELECT a.user_id FROM participant_google_auth a JOIN app_users u ON u.id=a.user_id
-    WHERE a.google_sub=? AND a.approved_email=? AND a.enabled=1 AND u.is_active=1`).bind(identity.sub, identity.email).first();
+  const findMapping = () => env.DB.prepare(`SELECT a.user_id FROM participant_google_auth a JOIN app_users u ON u.id=a.user_id
+    WHERE a.google_sub=? AND a.enabled=1 AND u.is_active=1`).bind(identity.sub).first();
+  let mapping = await findMapping();
+  if (!mapping) {
+    await claimPreapproval(identity, env);
+    mapping = await findMapping();
+  }
   if (!mapping) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM auth_requests WHERE requested_at<?").bind(new Date(Date.now() - 30 * 86400000).toISOString()),
@@ -121,8 +143,8 @@ async function login(request, env, verify) {
     env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at<=?").bind(instant()),
     env.DB.prepare(`INSERT INTO auth_sessions VALUES(?,
       (SELECT a.user_id FROM participant_google_auth a JOIN app_users u ON u.id=a.user_id
-       WHERE a.google_sub=? AND a.approved_email=? AND a.enabled=1 AND u.is_active=1),?,?,?)`)
-      .bind(hash, identity.sub, identity.email, identity.sub, instant(), new Date(Date.now() + seconds * 1000).toISOString())
+       WHERE a.google_sub=? AND a.enabled=1 AND u.is_active=1),?,?,?)`)
+      .bind(hash, identity.sub, identity.sub, instant(), new Date(Date.now() + seconds * 1000).toISOString())
   ]);
   const response = json({ signed_in: true });
   response.headers.append("Set-Cookie", cookie(env, "session", token, input.remember ? seconds : undefined));

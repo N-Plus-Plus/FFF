@@ -5,7 +5,7 @@ import { createWorker } from "../src/index.js";
 import { createGoogleVerifier } from "../src/google-auth.js";
 import assert from "node:assert/strict";
 
-export async function fixture(origin = "https://wirewednesday.nissen.nexus") {
+export async function fixture(origin = "https://wirewednesday.nissen.nexus", { beforeMigration, afterMigration } = {}) {
   const platform = await getPlatformProxy({ configPath: "wrangler.jsonc", persist: false });
   const env = { ...platform.env, APP_ORIGIN: origin, GOOGLE_CLIENT_ID: "synthetic-client", ASSETS: { async fetch(request) {
     const url = new URL(request.url);
@@ -20,6 +20,7 @@ export async function fixture(origin = "https://wirewednesday.nissen.nexus") {
   let beforeAuthMigration;
   const preservationTables = ["app_users", "shows", "show_nominations", "user_show_rankings"];
   for (const name of (await readdir("cloudflare/migrations")).filter((n) => n.endsWith(".sql")).sort()) {
+    await beforeMigration?.(name, env.DB);
     if (name === "0004_google_auth.sql") {
       await env.DB.prepare("INSERT INTO app_users(id,display_name,link_token_hash,token_issued_at,created_at,updated_at) VALUES('history','Historical fixture',?,'2026-01-01','2026-01-01','2026-01-01')").bind("0".repeat(64)).run();
       await env.DB.prepare("INSERT INTO shows(id,imdb_id,title,first_enrolled_by,created_at,updated_at) VALUES('history-show','tt90000009','Historical show','history','2026-01-01','2026-01-01')").run();
@@ -40,6 +41,7 @@ export async function fixture(origin = "https://wirewednesday.nissen.nexus") {
         statement = "";
       }
     }
+    await afterMigration?.(name, env.DB);
     if (name === "0004_google_auth.sql") {
       const after = await Promise.all(preservationTables.map(async (table) => (await env.DB.prepare(`SELECT * FROM ${table}`).all()).results));
       assert.deepEqual(after, beforeAuthMigration, "Forward auth migration preserves all existing participant/nomination/ranking/show fields");
