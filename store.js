@@ -18,6 +18,8 @@ export function isApiConfigured(config) {
 }
 
 function createCloudflareStore(config) {
+  // The shared demo interface accepts a local selector. Production ignores it;
+  // the HttpOnly session is the sole participant authority.
   const request = (path, _demoParticipant, body = {}) => apiRequest(path, body);
   return {
     async load(demoParticipant) { return normalizeSnapshot(await request("/v1/load", demoParticipant), config); },

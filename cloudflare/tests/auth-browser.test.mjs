@@ -89,6 +89,9 @@ try {
   await page.waitForFunction(() => document.querySelector("#userBadge")?.textContent.startsWith("Participant A"));
   await page.getByRole("tab", { name: "List", exact: true }).click();
   assert(await page.locator("#rankedList").getByText("Synthetic show", { exact: true }).isVisible());
+  const otherTab = await context.newPage();
+  await otherTab.goto(origin);
+  await otherTab.waitForFunction(() => document.querySelector("#userBadge")?.textContent.startsWith("Participant A"));
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   assert.equal((await context.request.get(origin + "/auth/session")).status(), 401, "Logout must revoke the remembered session");
   await page.waitForFunction(() => Boolean(document.querySelector("#googleButton")));
@@ -98,6 +101,7 @@ try {
   });
   assert.equal((await context.request.get(origin + "/auth/session")).status(), 401);
   assert.equal((await context.request.get(origin + "/app.js")).status(), 401);
+  await otherTab.locator("#googleButton").waitFor();
   assert.equal(externalScripts, 0);
   console.log("Mock Google browser sign-in, nomination/ranking, remembered browser session, logout and local-only scripts passed.");
 } finally {

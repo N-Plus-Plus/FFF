@@ -44,6 +44,7 @@ async function initialize(clearError = true) {
     busy = true; host.inert = true; host.setAttribute("aria-busy", "true"); status.hidden = false;
     try {
       await auth("google", { credential, remember: document.querySelector("#rememberMe").checked });
+      new BroadcastChannel("ww-session").postMessage("changed");
       google.disableAutoSelect(); location.replace("/");
     } catch (error) {
       failure(error);

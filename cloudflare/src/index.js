@@ -40,6 +40,8 @@ async function handleRequest(request, env, verifyGoogle) {
     if (request.method !== "POST") return json({ message: "Not found." }, 404);
     sameOrigin(request, env);
     const user = await authenticate(request, env);
+    const expectedParticipant = request.headers.get("X-WW-Participant");
+    if (expectedParticipant && expectedParticipant !== user.id) return Response.json({ message: "Your signed-in account changed. Reload the application.", code: "SESSION_CHANGED" }, { status: 409 });
     if (!(request.headers.get("content-type") || "").startsWith("application/json")) return json({ message: "Use JSON." }, 415);
     const text = await request.text();
     if (text.length > 32768) return json({ message: "Request is too large." }, 413);

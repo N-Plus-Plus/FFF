@@ -1,12 +1,15 @@
+let expectedParticipant = "";
+export function setExpectedParticipant(id) { expectedParticipant = id; }
 export async function apiRequest(path, body) {
   const response = await fetch(path, {
     method: body === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store",
-    referrerPolicy: "no-referrer", headers: body === undefined ? {} : { "Content-Type": "application/json" },
+    referrerPolicy: "no-referrer", headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(expectedParticipant ? { "X-WW-Participant": expectedParticipant } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 || data.code === "SESSION_CHANGED") {
       // Remove private content immediately, including when another tab logs out.
       document.querySelector("#app")?.replaceChildren();
       location.replace("/");

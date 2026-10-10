@@ -1,6 +1,6 @@
 # Wire Wednesday
 
-A mobile-first shared TV catalogue, private participant orders, and a strict aggregate watch sequence. The existing `fff-api` Worker is prepared to serve `https://wirewednesday.nissen.nexus` using Static Assets, existing D1 `fff`, and R2 `fff-artwork`. This is uncommitted local preparation; no production cutover has occurred.
+A mobile-first shared TV catalogue, private participant orders, and a strict aggregate watch sequence. The existing `fff-api` Worker is prepared to serve `https://wirewednesday.nissen.nexus` using Static Assets, existing D1 `fff`, and R2 `fff-artwork`. This is migration preparation; no production cutover has occurred.
 
 ## Access and privacy
 
@@ -8,7 +8,7 @@ Google sign-in completely replaces participant links. Only an active existing pa
 
 Google credentials are verified server-side with `jose`, including signature, issuer, audience, expiry, verified email and a single-use browser-bound nonce. The anonymous sign-in page uses Google's official responsive `outline_dark` button following CanBan's current `frontend/SignIn.tsx`. Its Google SDK is the sole external script allowed on that document. The authenticated app uses locally packaged Lucide and Lexend Deca, with no external scripts. Existing fonts/icons retain their visual system.
 
-Sessions use random opaque cookies, storing only hashes in D1. Production cookies are HttpOnly, Secure and host-only; remembered login lasts at most 30 days. Unchecked remember uses a browser-session cookie with a 12-hour server expiry. Logout deletes the session. Approval changes invalidate sessions immediately; deactivation blocks them on every request. Mutations require the configured same origin. Private responses are no-store, and referrers are suppressed. Operator logging/cache review is still required before deployment.
+Sessions use random opaque cookies, storing only hashes in D1. Production cookies are HttpOnly, Secure and host-only; remembered login lasts at most 30 days. Unchecked remember uses a browser-session cookie with a 12-hour server expiry. Logout deletes the session. Approval changes invalidate sessions immediately; deactivation blocks them on every request. Login/logout clears other tabs, and a server guard rejects stale-tab writes after an account change. Mutations require the configured same origin. Private responses are no-store, and referrers are suppressed. Operator logging/cache review is still required before deployment.
 
 The session selects one existing participant ID. Their nominations, rankings, admin status and history stay attached to that ID. Other participants' personal order and identities are not returned. Inactive or unapproved participants' retained ballots still influence aggregate order, while only active approved participants count toward confirmation.
 

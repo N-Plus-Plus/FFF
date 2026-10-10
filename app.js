@@ -1,4 +1,4 @@
-import { apiRequest } from "./api.js";
+import { apiRequest, setExpectedParticipant } from "./api.js";
 import { APP_CONFIG } from "./config.js";
 import { createDataStore, isApiConfigured } from "./store.js";
 import { createMetadataProvider, normalizeProviderTitle, parseImdbId } from "./providers.js";
@@ -104,6 +104,7 @@ function bindEvents() {
     event.preventDefault();
     try {
       await apiRequest("/auth/logout", {});
+      new BroadcastChannel("ww-session").postMessage("changed");
       document.querySelector("#app").replaceChildren();
       sessionStorage.removeItem(REMINDER_DISMISSED_KEY);
       location.replace("/");
@@ -146,8 +147,16 @@ function bindEvents() {
   window.addEventListener("online", () => startBoardRealtime());
   window.addEventListener("beforeunload", teardownRealtime);
   const checkSession = () => {
-    if (!appState.demoMode && !document.hidden) apiRequest("/auth/session").catch(() => {});
+    if (!appState.demoMode && !document.hidden) apiRequest("/auth/session").then((data) => {
+      if (appState.currentUser && data.current_user.id !== appState.currentUser.id) {
+        document.querySelector("#app").replaceChildren(); location.replace("/");
+      }
+    }).catch(() => {});
   };
+  if (!appState.demoMode) {
+    const channel = new BroadcastChannel("ww-session");
+    channel.onmessage = () => { document.querySelector("#app").replaceChildren(); location.replace("/"); };
+  }
   window.addEventListener("focus", checkSession);
   document.addEventListener("visibilitychange", checkSession);
   window.addEventListener("pageshow", (event) => {
@@ -169,6 +178,7 @@ async function loadApp() {
   setLoading("Loading shared list");
   const data = await dataStore.load(appState.demoParticipant);
   appState.currentUser = data.currentUser;
+  if (!appState.demoMode) setExpectedParticipant(data.currentUser.id);
   appState.shows = data.shows;
   appState.removedShows = data.removedShows;
   appState.ranked = data.ranked;

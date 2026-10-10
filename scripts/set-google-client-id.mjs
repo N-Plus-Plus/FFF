@@ -9,4 +9,4 @@ if (!vars.GOOGLE_CLIENT_ID?.trim()) throw new Error("GOOGLE_CLIENT_ID is missing
 const child = spawn(process.execPath, ["node_modules/wrangler/bin/wrangler.js", "secret", "put", "GOOGLE_CLIENT_ID", "--name", "fff-api"], { stdio: ["pipe", "inherit", "inherit"] });
 child.stdin.end(vars.GOOGLE_CLIENT_ID.trim() + "\n");
 child.on("error", () => { process.exitCode = 1; });
-child.on("exit", (code) => { process.exitCode = code || 0; });
+child.on("exit", (code) => { process.exitCode = code ?? 1; });
