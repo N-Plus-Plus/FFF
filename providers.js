@@ -1,3 +1,4 @@
+import { apiRequest } from "./api.js";
 const DEMO_RESULTS = [
   {
     imdb_id: "tt14452776",
@@ -72,8 +73,8 @@ const REJECTED_TITLE_TYPES = new Set([
   "special"
 ]);
 
-export function createMetadataProvider({ config, token, demoMode }) {
-  const imdb = demoMode ? createDemoImdbAdapter() : createEdgeImdbAdapter(config, token);
+export function createMetadataProvider({ config, demoMode }) {
+  const imdb = demoMode ? createDemoImdbAdapter() : createEdgeImdbAdapter(config);
 
   return {
     providerName: "TVmaze",
@@ -98,22 +99,22 @@ export function createMetadataProvider({ config, token, demoMode }) {
   };
 }
 
-function createEdgeImdbAdapter(config, token) {
+function createEdgeImdbAdapter(config) {
   return {
     async search(query) {
-      const data = await requestImdb(config, token, { action: "search", query });
+      const data = await requestImdb(config, { action: "search", query });
       return (data.results || []).map(normalizeProviderTitle).filter((item) => item.imdbId && item.title);
     },
     async lookup(imdbId) {
-      const data = await requestImdb(config, token, { action: "lookup", imdbId });
+      const data = await requestImdb(config, { action: "lookup", imdbId });
       return data.result ? normalizeProviderTitle(data.result) : null;
     },
     async enroll(imdbId) {
-      const data = await requestImdb(config, token, { action: "enroll", imdbId });
+      const data = await requestImdb(config, { action: "enroll", imdbId });
       return data.show || data.result || null;
     },
     async verifyBackgrounds(items) {
-      return requestImdb(config, token, { action: "verify-backgrounds", items });
+      return requestImdb(config, { action: "verify-backgrounds", items });
     }
   };
 }
@@ -140,42 +141,9 @@ function createDemoImdbAdapter() {
   };
 }
 
-async function requestImdb(config, token, payload) {
-  if (config.apiUrl) {
-    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/v1/metadata`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, token })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || `TV metadata request failed with ${response.status}.`);
-    return data;
-  }
-  if (!config.supabaseUrl || !config.supabaseAnonKey) {
-    throw new Error("API is not configured, so TV show search is unavailable.");
-  }
-
-  const endpoint = `${config.supabaseUrl.replace(/\/$/, "")}/functions/v1/imdb`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: config.supabaseAnonKey,
-      Authorization: `Bearer ${config.supabaseAnonKey}`
-    },
-    body: JSON.stringify({ ...payload, token })
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || `TV metadata request failed with ${response.status}.`);
-  }
-  return data;
-}
-
-export async function enrollImdbShow(config, token, imdbId) {
-  const data = await requestImdb(config, token, { action: "enroll", imdbId });
-  return data.show || data.result;
+async function requestImdb(config, payload) {
+  if (!config.apiUrl) throw new Error("Same-origin API is not configured.");
+  return apiRequest("/v1/metadata", payload);
 }
 
 export function parseImdbId(value) {

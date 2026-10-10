@@ -1,8 +1,7 @@
 import { computeProvisionalBoard } from "./ranking.js";
-import { enrollImdbShow } from "./providers.js";
+import { apiRequest } from "./api.js";
 
 const LOCAL_STATE_KEY = "fff.localDemo.v4";
-const POSTER_BUCKET = "show-posters";
 
 export function createDataStore(config, { demoMode }) {
   if (demoMode) {
@@ -11,141 +10,31 @@ export function createDataStore(config, { demoMode }) {
   if (config.apiUrl) {
     return createCloudflareStore(config);
   }
-  return createSupabaseStore(config);
+  throw new Error("Same-origin API is not configured.");
 }
 
 export function isApiConfigured(config) {
-  return Boolean(config.apiUrl || (config.supabaseUrl && config.supabaseAnonKey));
+  return Boolean(config.apiUrl);
 }
 
 function createCloudflareStore(config) {
-  const request = async (path, token, body = {}) => {
-    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, token }) });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || `API request failed with ${response.status}.`);
-    return data;
-  };
+  const request = (path, _demoParticipant, body = {}) => apiRequest(path, body);
   return {
-    async load(token) { return normalizeSnapshot(await request("/v1/load", token), config); },
-    async listCatalogue(token) { const data = await request("/v1/catalogue", token); return { shows: (data.shows || []).map((show) => normalizeShow(show, config)), removedShows: (data.removed_shows || []).map((show) => normalizeShow(show, config)) }; },
-    async nominate(token, show) { return normalizeShow(await request("/v1/nominate", token, { imdbId: show.imdbId }), config); },
-    async withdraw(token, showId) { return normalizeShow(await request("/v1/withdraw", token, { showId }), config); },
-    async removeShow(token, showId) { return normalizeShow(await request("/v1/admin/remove", token, { showId }), config); },
-    async getOrder(token) { const data = await request("/v1/order", token); return { ranked: (data.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.unranked || []).map((show) => normalizeShow(show, config)) }; },
-    async replaceRanking(token, showIds) { const data = await request("/v1/ranking", token, { showIds }); return { revision: data.revision, updatedAt: data.updated_at, ranked: (data.order?.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.order?.unranked || []).map((show) => normalizeShow(show, config)) }; },
-    async getBoard(token) { return normalizeBoard(await request("/v1/board", token), config); },
-    async getBoardRevision(token) { const data = await request("/v1/revision", token); return { revision: Number(data.revision || 0), updatedAt: data.updated_at || "" }; },
+    async load(demoParticipant) { return normalizeSnapshot(await request("/v1/load", demoParticipant), config); },
+    async listCatalogue(demoParticipant) { const data = await request("/v1/catalogue", demoParticipant); return { shows: (data.shows || []).map((show) => normalizeShow(show, config)), removedShows: (data.removed_shows || []).map((show) => normalizeShow(show, config)) }; },
+    async nominate(demoParticipant, show) { return normalizeShow(await request("/v1/nominate", demoParticipant, { imdbId: show.imdbId }), config); },
+    async withdraw(demoParticipant, showId) { return normalizeShow(await request("/v1/withdraw", demoParticipant, { showId }), config); },
+    async removeShow(demoParticipant, showId) { return normalizeShow(await request("/v1/admin/remove", demoParticipant, { showId }), config); },
+    async getOrder(demoParticipant) { const data = await request("/v1/order", demoParticipant); return { ranked: (data.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.unranked || []).map((show) => normalizeShow(show, config)) }; },
+    async replaceRanking(demoParticipant, showIds) { const data = await request("/v1/ranking", demoParticipant, { showIds }); return { revision: data.revision, updatedAt: data.updated_at, ranked: (data.order?.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.order?.unranked || []).map((show) => normalizeShow(show, config)) }; },
+    async getBoard(demoParticipant) { return normalizeBoard(await request("/v1/board", demoParticipant), config); },
+    async getBoardRevision(demoParticipant) { const data = await request("/v1/revision", demoParticipant); return { revision: Number(data.revision || 0), updatedAt: data.updated_at || "" }; },
     async subscribeBoardInvalidation() { return () => {}; }
   };
 }
 
 function normalizeSnapshot(data, config) {
   return { currentUser: normalizeUser(data.current_user), shows: (data.shows || []).map((show) => normalizeShow(show, config)), removedShows: (data.removed_shows || []).map((show) => normalizeShow(show, config)), ranked: (data.ranked || []).map((show) => normalizeShow(show, config)), unranked: (data.unranked || []).map((show) => normalizeShow(show, config)), board: normalizeBoard(data.board, config) };
-}
-
-function createSupabaseStore(config) {
-  let supabasePromise = null;
-  const getSupabase = async () => {
-    if (!supabasePromise) {
-      supabasePromise = import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm")
-        .then((module) => module.createClient(config.supabaseUrl, config.supabaseAnonKey));
-    }
-    return supabasePromise;
-  };
-
-  const rpc = async (name, args) => {
-    const supabase = await getSupabase();
-    const { data, error } = await supabase.rpc(name, args);
-    if (error) {
-      throw new Error(error.message);
-    }
-    return data;
-  };
-
-  return {
-    async load(token) {
-      const [catalogue, order, board] = await Promise.all([
-        rpc("list_catalogue", { p_link_token: token }),
-        rpc("get_user_order", { p_link_token: token }),
-        rpc("get_board", { p_link_token: token })
-      ]);
-      return {
-        currentUser: normalizeUser(catalogue.current_user),
-        shows: (catalogue.shows || []).map((show) => normalizeShow(show, config)),
-        removedShows: [],
-        ranked: (order.ranked || []).map((show) => normalizeShow(show, config)),
-        unranked: (order.unranked || []).map((show) => normalizeShow(show, config)),
-        board: normalizeBoard(board, config)
-      };
-    },
-    async listCatalogue(token) {
-      const data = await rpc("list_catalogue", { p_link_token: token });
-      return {
-        shows: (data.shows || []).map((show) => normalizeShow(show, config)),
-        removedShows: []
-      };
-    },
-    async nominate(token, show) {
-      const data = await enrollImdbShow(config, token, show.imdbId);
-      return normalizeShow(data, config);
-    },
-    async withdraw(token, showId) {
-      return normalizeShow(await rpc("withdraw_nomination", { p_link_token: token, p_show_id: showId }), config);
-    },
-    async removeShow(token, showId) {
-      return normalizeShow(await rpc("admin_remove_show", {
-        p_link_token: token,
-        p_show_id: showId
-      }), config);
-    },
-    async getOrder(token) {
-      const data = await rpc("get_user_order", { p_link_token: token });
-      return {
-        ranked: (data.ranked || []).map((show) => normalizeShow(show, config)),
-        unranked: (data.unranked || []).map((show) => normalizeShow(show, config))
-      };
-    },
-    async replaceRanking(token, showIds) {
-      const data = await rpc("replace_user_ranking", { p_link_token: token, p_show_ids: showIds });
-      return {
-        revision: data.revision,
-        updatedAt: data.updated_at,
-        ranked: (data.order?.ranked || []).map((show) => normalizeShow(show, config)),
-        unranked: (data.order?.unranked || []).map((show) => normalizeShow(show, config))
-      };
-    },
-    async getBoard(token) {
-      return normalizeBoard(await rpc("get_board", { p_link_token: token }), config);
-    },
-    async getBoardRevision(token) {
-      const data = await rpc("get_board_revision", { p_link_token: token });
-      return {
-        revision: Number(data?.revision || 0),
-        updatedAt: data?.updated_at || data?.updatedAt || ""
-      };
-    },
-    async subscribeBoardInvalidation(onRevision) {
-      const supabase = await getSupabase();
-      const channel = supabase
-        .channel("board-revision")
-        .on("postgres_changes", {
-          event: "*",
-          schema: "public",
-          table: "board_revision_public"
-        }, (payload) => {
-          const row = payload.new || {};
-          onRevision({
-            revision: Number(row.revision || 0),
-            updatedAt: row.updated_at || ""
-          });
-        })
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  };
 }
 
 function createLocalDemoStore() {
@@ -156,17 +45,17 @@ function createLocalDemoStore() {
   };
 
   return {
-    async load(token) {
-      const state = readLocalState(token);
+    async load(demoParticipant) {
+      const state = readLocalState(demoParticipant);
       return snapshot(state);
     },
-    async listCatalogue(token) {
-      const state = readLocalState(token);
+    async listCatalogue(demoParticipant) {
+      const state = readLocalState(demoParticipant);
       return catalogueSnapshot(state);
     },
-    async nominate(token, show) {
-      const state = readLocalState(token);
-      const user = currentLocalUser(state, token);
+    async nominate(demoParticipant, show) {
+      const state = readLocalState(demoParticipant);
+      const user = currentLocalUser(state, demoParticipant);
       let saved = state.shows.find((item) => item.imdbId === show.imdbId);
       if (saved?.adminRemovedAt) {
         throw new Error("This show was removed by the administrator.");
@@ -199,9 +88,9 @@ function createLocalDemoStore() {
       notifyRevision(state);
       return decorateShow(saved, state, user.id);
     },
-    async withdraw(token, showId) {
-      const state = readLocalState(token);
-      const user = currentLocalUser(state, token);
+    async withdraw(demoParticipant, showId) {
+      const state = readLocalState(demoParticipant);
+      const user = currentLocalUser(state, demoParticipant);
       const key = `${user.id}:${showId}`;
       if (state.nominations[key]) {
         state.nominations[key].withdrawnAt = new Date().toISOString();
@@ -215,9 +104,9 @@ function createLocalDemoStore() {
       notifyRevision(state);
       return decorateShow(state.shows.find((show) => show.id === showId), state, user.id);
     },
-    async removeShow(token, showId) {
-      const state = readLocalState(token);
-      const user = currentLocalUser(state, token);
+    async removeShow(demoParticipant, showId) {
+      const state = readLocalState(demoParticipant);
+      const user = currentLocalUser(state, demoParticipant);
       if (!user.isAdmin) {
         throw new Error("Administrator access is required.");
       }
@@ -232,13 +121,13 @@ function createLocalDemoStore() {
       notifyRevision(state);
       return decorateShow(show, state, user.id);
     },
-    async getOrder(token) {
-      const state = readLocalState(token);
-      return orderSnapshot(state, currentLocalUser(state, token));
+    async getOrder(demoParticipant) {
+      const state = readLocalState(demoParticipant);
+      return orderSnapshot(state, currentLocalUser(state, demoParticipant));
     },
-    async replaceRanking(token, showIds) {
-      const state = readLocalState(token);
-      const user = currentLocalUser(state, token);
+    async replaceRanking(demoParticipant, showIds) {
+      const state = readLocalState(demoParticipant);
+      const user = currentLocalUser(state, demoParticipant);
       const activeIds = new Set(activeShows(state).map((show) => show.id));
       if (new Set(showIds).size !== showIds.length) {
         throw new Error("Ranking sequence contains duplicate shows.");
@@ -252,11 +141,11 @@ function createLocalDemoStore() {
       notifyRevision(state);
       return { revision: state.revision, updatedAt: state.updatedAt, ...orderSnapshot(state, user) };
     },
-    async getBoard(token) {
-      return boardSnapshot(readLocalState(token));
+    async getBoard(demoParticipant) {
+      return boardSnapshot(readLocalState(demoParticipant));
     },
-    async getBoardRevision(token) {
-      const state = readLocalState(token);
+    async getBoardRevision(demoParticipant) {
+      const state = readLocalState(demoParticipant);
       return { revision: state.revision, updatedAt: state.updatedAt };
     },
     async subscribeBoardInvalidation(onRevision) {
@@ -264,9 +153,9 @@ function createLocalDemoStore() {
       window.addEventListener("fff-demo-board-revision", listener);
       return () => window.removeEventListener("fff-demo-board-revision", listener);
     },
-    async adminSetUserActive(token, userId, isActive) {
-      const state = readLocalState(token);
-      const admin = currentLocalUser(state, token);
+    async adminSetUserActive(demoParticipant, userId, isActive) {
+      const state = readLocalState(demoParticipant);
+      const admin = currentLocalUser(state, demoParticipant);
       if (!admin.isAdmin) {
         throw new Error("Administrator access is required.");
       }
@@ -288,8 +177,7 @@ function normalizeUser(user) {
     id: user.id,
     displayName: user.display_name || user.displayName,
     isAdmin: Boolean(user.is_admin || user.isAdmin),
-    isActive: user.is_active ?? user.isActive ?? true,
-    tokenRevokedAt: user.token_revoked_at || user.tokenRevokedAt || null
+    isActive: user.is_active ?? user.isActive ?? true
   };
 }
 
@@ -382,21 +270,21 @@ function normalizeBoard(board, config = null) {
   };
 }
 
-function readLocalState(token) {
+function readLocalState(demoParticipant) {
   const existing = localStorage.getItem(LOCAL_STATE_KEY);
   if (existing) {
     const parsed = JSON.parse(existing);
-    parsed.currentUserId = currentLocalUser(parsed, token).id;
+    parsed.currentUserId = currentLocalUser(parsed, demoParticipant).id;
     return parsed;
   }
 
   const state = {
     currentUserId: "demo-admin",
     users: [
-      { id: "demo-admin", displayName: "Demo admin", isAdmin: true, isActive: true, token: "demo-admin" },
-      { id: "demo-user", displayName: "Demo user", isAdmin: false, isActive: true, token: "demo-user" },
-      { id: "demo-casey", displayName: "Casey", isAdmin: false, isActive: true, token: "demo-casey" },
-      { id: "demo-riley", displayName: "Riley", isAdmin: false, isActive: false, token: "demo-riley" }
+      { id: "demo-admin", displayName: "Demo admin", isAdmin: true, isActive: true, demoParticipant: "demo-admin" },
+      { id: "demo-user", displayName: "Demo user", isAdmin: false, isActive: true, demoParticipant: "demo-user" },
+      { id: "demo-casey", displayName: "Casey", isAdmin: false, isActive: true, demoParticipant: "demo-casey" },
+      { id: "demo-riley", displayName: "Riley", isAdmin: false, isActive: false, demoParticipant: "demo-riley" }
     ],
     shows: seededShows(),
     nominations: {},
@@ -410,7 +298,7 @@ function readLocalState(token) {
     updatedAt: new Date().toISOString()
   };
   seedNominations(state);
-  state.currentUserId = currentLocalUser(state, token).id;
+  state.currentUserId = currentLocalUser(state, demoParticipant).id;
   writeLocalState(state);
   return state;
 }
@@ -419,10 +307,10 @@ function writeLocalState(state) {
   localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(state));
 }
 
-function currentLocalUser(state, token) {
-  const user = state.users.find((item) => item.token === token) || state.users[0];
-  if (!user.isActive || user.tokenRevokedAt) {
-    throw new Error("Invalid or inactive user link.");
+function currentLocalUser(state, demoParticipant) {
+  const user = state.users.find((item) => item.demoParticipant === demoParticipant) || state.users[0];
+  if (!user.isActive) {
+    throw new Error("Inactive demo participant.");
   }
   return user;
 }
@@ -509,8 +397,7 @@ function posterPublicUrl(config, path) {
   if (config?.apiUrl) {
     return `${config.apiUrl.replace(/\/$/, "")}/artwork/${encodeURIComponent(path).replaceAll("%2F", "/")}`;
   }
-  if (!config?.supabaseUrl) return "";
-  return `${config.supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${POSTER_BUCKET}/${encodeURIComponent(path).replaceAll("%2F", "/")}`;
+  return "";
 }
 
 function bumpRevision(state) {

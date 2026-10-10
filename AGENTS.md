@@ -23,21 +23,21 @@ Do not ask the user to repeat context already stated accurately in this file or 
 
 ## 2. Project state
 
-The project is now an initial static web app scaffold.
+The project is an established static web app with a Cloudflare backend and a prepared Cloudflare hosting cutover.
 
 | Project fact | Current state |
 | --- | --- |
-| Project name | FFF TV Ranking |
+| Project name | Wire Wednesday (internal repository/resources remain FFF) |
 | Product purpose | Mobile-first shared TV show catalogue, private personal ordering, and strict aggregate Board sequence |
-| Intended users | Manually created known users who receive unique secret token links |
-| Project maturity | Static scaffold with Supabase architecture established |
-| Application shape | Static GitHub Pages app with raw HTML, CSS, and JavaScript ES modules |
+| Intended users | Existing known participants explicitly mapped to approved Google subjects; no registration |
+| Project maturity | Established static app with Cloudflare backend; Supabase retained as historical/rollback infrastructure |
+| Application shape | Static HTML/CSS/JavaScript ES modules; prepared for existing Cloudflare Worker Static Assets |
 | Languages and runtime | Browser JavaScript, HTML, CSS; no build step |
-| Frameworks and major libraries | Raw browser JavaScript; Playwright/Chromium are development-only browser verification tools, with no runtime third-party data client |
+| Frameworks and major libraries | Raw browser JS; Worker `jose` 6.2.12 verifies Google credentials; pinned Lucide 1.55.0 and Lexend Deca 5.3.0 packaged locally; Playwright/Wrangler development tools |
 | Package manager | npm, for development-only tooling |
 | Persistence or database | Cloudflare D1 (`fff`, Oceania) is the frontend target through Worker `fff-api`; Supabase Postgres remains intact as rollback and historical source. Opt-in localStorage demo with `?demo=1` |
 | External services | Cloudflare Workers, D1, R2, and Cron Trigger; TVmaze primary television metadata; Supabase remains rollback/historical infrastructure |
-| Deployment target | GitHub Pages |
+| Deployment target | Cloudflare `fff-api` at `wirewednesday.nissen.nexus` prepared locally; GitHub Pages remains live pending approved cutover |
 | Source-control policy | Git worktree on `main` with `origin` at `https://github.com/N-Plus-Plus/FFF.git`; preserve unrelated user changes and do not push, commit, or rewrite history unless explicitly requested |
 | Test framework | Targeted Playwright placement smoke check in `scripts/placement-browser-test.mjs` |
 | Build, run, and verification commands | See project commands |
@@ -77,14 +77,14 @@ Maintain this section as the project develops. It should help a future agent fin
 | Application entry point | `index.html` |
 | User interface | `style.css`, DOM rendering in `app.js` |
 | Domain or business rules | Board aggregate strategy and IMDb tie-breaking in `ranking.js`; ranking sequence orchestration in `app.js` |
-| Persistence and data access | Supabase/local data store helpers in `store.js`; schema/RPC in `supabase/migrations/` |
-| API or service boundaries | TVmaze primary provider boundary and TVDB fallback merge helpers in `providers.js`; canonical IMDb Edge Function in `supabase/functions/imdb`; weekly refresh Edge Function in `supabase/functions/metadata-refresh`; weekly ordering reminder Edge Function in `supabase/functions/weekly-order-reminders`; Supabase RPC functions in migrations |
+| Persistence and data access | Same-origin session adapter in `store.js`/`api.js`; authoritative D1 schema in `cloudflare/migrations/`; Supabase source is historical |
+| API or service boundaries | `cloudflare/src/index.js` owns API/metadata/artwork/Cron; `cloudflare/src/google-auth.js` owns Google verification and sessions; `providers.js` owns frontend metadata normalization |
 | Cloudflare migration | `wrangler.jsonc`, D1 schema in `cloudflare/migrations/`, Worker API in `cloudflare/src/index.js`, and private-export conversion helper in `cloudflare/scripts/import-d1.mjs` |
-| Configuration | `config.js` |
+| Configuration | `config.js` selects same-origin delivery; `wrangler.jsonc` owns resources/origin/Cron; ignored root `.env.vars` is local Google configuration |
 | Shared utilities | Small ES modules in `store.js`, `providers.js`, and `ranking.js` |
-| Tests | `scripts/placement-browser-test.mjs` exercises the mobile Rank placement interaction in isolated `?demo=1` browser storage |
-| Build and deployment | Static files served by GitHub Pages; no build step |
-| Further documentation | `README.md` |
+| Tests | Contract/demo checks in `scripts/verify-contracts.mjs`; disposable signed-Google/D1/R2 tests in `cloudflare/tests/`; actual Wrangler/placement checks in `scripts/`; anonymous official-button review in `scripts/review-google-button.mjs` |
+| Build and deployment | `cloudflare/scripts/prepare-assets.mjs` copies an explicit public-file allowlist; Wrangler serves it through existing `fff-api` |
+| Further documentation | `README.md`; `cloudflare/DEPLOYMENT.md` for delivery, privacy, cutover and rollback |
 
 Update this map when files gain clear ownership, move, or are retired. Prefer direct ownership guidance over a long inventory of every file.
 
@@ -326,15 +326,16 @@ Replace this table as commands become established. Verify commands from the curr
 | Purpose | Command |
 | --- | --- |
 | Install dependencies | `npm install`; install Chromium for browser verification with `npx playwright install chromium` |
-| Start development mode | `.\start-local-server.bat` for port 3000 device testing, or `python -m http.server 3000 --bind 0.0.0.0` |
-| Build | Not applicable; static files are served directly |
-| Start production mode | GitHub Pages serves the repository files directly |
+| Start development mode | `.\start-local-server.bat` starts local Wrangler using ignored `.env.vars`; exact loopback origin and demo URL printed by the script |
+| Build | `node cloudflare/scripts/prepare-assets.mjs` (public asset copying only; also run by Wrangler) |
+| Local Cloudflare checks | `node cloudflare/tests/hosting.test.mjs`; `node cloudflare/tests/auth-browser.test.mjs`; with local Wrangler running, `node scripts/hosting-browser-test.mjs` |
+| Start production mode | Separately approved Wrangler deployment; see `cloudflare/DEPLOYMENT.md` |
 | Targeted tests | `node --check app.js`; `node --check store.js`; `node --check providers.js`; `node --check ranking.js`; `node --check scripts/verify-contracts.mjs`; `node scripts/verify-contracts.mjs`; with a local server already running, `node scripts/placement-browser-test.mjs` |
 | Full test suite | Not established |
 | Type checking | Not established |
 | Linting | Not established |
 | Formatting or encoding check | Not established |
-| Database or schema validation | `npx.cmd supabase db push --dry-run --linked --yes` when Supabase CLI auth and a linked development project are available |
+| Database or schema validation | Disposable fixture applies all forward D1 migrations in `cloudflare/tests/hosting.test.mjs`; no remote database checks during migration preparation |
 
 Do not leave obsolete commands in this table after scripts are renamed or retired.
 
@@ -342,34 +343,36 @@ Do not leave obsolete commands in this table after scripts are renamed or retire
 
 Current decisions:
 
-- The app is static and must run on GitHub Pages without a custom application server.
-- `index.html` deliberately appends a per-page-load cache-busting query string to local CSS and module assets so refreshes do not reuse stale UI files.
-- The frontend uses the Cloudflare Worker `fff-api` through `config.js`; browser code calls narrow token-authenticated HTTP endpoints and receives no direct D1 access. Supabase remains the rollback source and must not be deleted or modified during this migration.
+- Canonical future hosting is existing `fff-api` with Static Assets at `https://wirewednesday.nissen.nexus`. Prepared cutover disables workers.dev and cross-origin API use; GitHub Pages can retire during the approved cutover. Package only allowlisted frontend files.
+- `bootstrap.js` appends per-page-load cache-busting queries to CSS and app modules. No inline scripts or document.write; production app CSP allows only local scripts.
+- The frontend uses same-origin session-authenticated Worker endpoints and receives no direct D1 access. Supabase remains historical infrastructure and must not be modified during local preparation.
 - The deployed Cloudflare resources are Worker `fff-api`, D1 `fff` in Oceania, and R2 `fff-artwork`. Once live writes reach D1, rollback to Supabase is not lossless without export/reconciliation.
 - Cloudflare import/export must not depend on Docker. Use the authenticated Supabase Management API through `npx.cmd supabase db query --linked` for explicit, read-only FFF table projections; private exports and generated D1 import SQL stay ignored under `cloudflare/private-*`.
-- Cloudflare D1 import serialises PostgreSQL boolean values as SQLite integers (`0`/`1`), never text booleans. Worker link authentication requires `is_active = 1`; token hashes remain imported verbatim as lowercase 64-character SHA-256 hex.
+- Historical import tooling serialises PostgreSQL booleans as SQLite integers (`0`/`1`); no import is part of hosting/auth cutover. Historical link columns remain inert and are never used by the prepared runtime.
 - The user expects Codex to control the linked Supabase project for requested backend work. Apply migrations, deploy Edge Functions, inspect remote state, and run bounded verification when needed, but do not run destructive linked resets or bulk data changes unless the user explicitly asks for that specific operation.
 - The catalogue is global and shared; `shows` is the canonical IMDb-deduplicated record, and nominations are a separate per-user concept. Multiple users may nominate the same show, but a user may have only one active nomination for a show.
-- Known users are manually administered outside the ordinary app UI.
-- Unique links use `?u=<link_token>` and the token is treated as a bearer credential. Store only token hashes in the database and never expose hashes to the browser.
+- Participant creation/Google mapping administration is operator-controlled outside the app. App admin status never permits choosing another participant for API operations.
+- Google exclusively authenticates participants. Exact verified Google subjects and approved emails map to existing participant IDs in `participant_google_auth`; no email-only matching, automatic creation or legacy fallback. Operator review/preparation is in `cloudflare/scripts/prepare-google-mapping.mjs` and `cloudflare/DEPLOYMENT.md`.
+- Session cookies are opaque, HttpOnly, host-only and Secure in production, with 30-day remembered or 12-hour browser-session expiry. D1 stores hashes; logout/reapproval invalidates sessions. Mutations require the configured origin and cannot accept actor overrides.
+- Only the anonymous sign-in document permits the Google GIS SDK/popup. Use official `outline_dark`, responsive width capped at 320px, matching current CanBan `SignIn.tsx`. Authenticated pages use local Lucide/fonts and a strict script CSP. Private content/API/artwork responses are private/no-store/no-referrer; logging and R2-public-exposure review remain deployment gates.
 - One known user can be marked administrator. Administrators may soft-remove active shows through the app; restoration is deliberately database/service-role only through `admin_restore_show`. Restoration clears the removal marker only, withdraws prior nominations, clears current ranking rows for that show, and leaves the show inactive until a fresh nomination.
-- `config.js` contains only the public Cloudflare Worker `apiUrl`. The Supabase adapter remains in `store.js` solely as source-controlled rollback compatibility; no Supabase runtime key or URL is published by the production configuration.
-- Migration files in `supabase/migrations/` are the authoritative schema source. Do not restore `supabase-schema.sql` as a competing schema.
-- IMDb title IDs are the canonical provider boundary and are mandatory for enrolled shows. Browser code must use the Supabase Edge Function in `supabase/functions/imdb`, which owns external provider access and allows CORS from configured origins plus loopback local origins on any port. TVmaze is the primary television metadata provider, requires no API key, and is called through fixed public HTTPS endpoints for search, IMDb lookup, episode retrieval, and `shows/{tvmazeId}/images` card-art retrieval after retaining the numeric TVmaze show ID. Do not search ordinary TVmaze show lookup responses for background or banner properties. Card-art selection considers usable background originals and banner original/medium URLs and selects the horizontal candidate closest to FFF's panoramic target ratio; `main: true`, then source resolution, break ties. The normal poster and local placeholder remain fallbacks. Canonical identity comes from TVmaze `externals.imdb`; reject TVmaze search results without an IMDb ID. Card-art records retain the selected TVmaze artwork type and dimensions so stale persisted image assets can be detected and refreshed.
+- `config.js` contains only same-origin `apiUrl: "/"`; no Supabase frontend adapter remains. Local Google setup explicitly loads ignored `.env.vars`; production client-ID configuration is separate and approved. Never publish environment files. GIS needs no client secret.
+- `cloudflare/migrations/` is the authoritative current schema, using forward-only additive changes. Supabase migrations remain historical source; do not recreate competing schema files or deploy historical bearer authentication.
+- IMDb title IDs are the canonical provider boundary and are mandatory for enrolled shows. Production browser code uses Worker `/v1/metadata`, which owns external provider access. Production API access is same-origin only. TVmaze is the primary television metadata provider, requires no API key, and is called through fixed public HTTPS endpoints for search, IMDb lookup, episode retrieval, and `shows/{tvmazeId}/images` card-art retrieval after retaining the numeric TVmaze show ID. Do not search ordinary TVmaze show lookup responses for background or banner properties. Card-art selection considers usable background originals and banner original/medium URLs and selects the horizontal candidate closest to FFF's panoramic target ratio; `main: true`, then source resolution, break ties. The normal poster and local placeholder remain fallbacks. Canonical identity comes from TVmaze `externals.imdb`; reject TVmaze search results without an IMDb ID. Card-art records retain the selected TVmaze artwork type and dimensions so stale persisted image assets can be detected and refreshed.
 - TVmaze cumulative runtime is exact only: sum explicit TVmaze episode `runtime` values, and leave cumulative runtime unknown if any retrieved episode lacks runtime. Do not estimate from average runtime or other derived fields.
 - TVmaze's provider rating is stored as a `/10` value. Order cards alone render it as a five-star Straw SVG overlay, rounded to the nearest half-star; Add and Board cards do not render ratings.
 - TVmaze data is licensed under CC BY-SA; the app shell currently does not render provider attribution copy in the Add UI.
 - TVDB is permitted only as fallback enrichment after TVmaze successfully resolves the canonical IMDb ID. It must include an explicit IMDb cross-reference that normalizes exactly to that canonical ID, may fill only absent supported fields, and must not run after primary-provider failure or appear in Add UI, search choices, canonical identity, duplicate detection, show URLs, or user-entered references. Supported fallback fields include series status, ended year, season count, episode count, exact/provider-supplied total runtime, poster source, background metadata, and TVDB record ID.
-- Ranking changes auto-save through `replace_user_ranking`; active shows may be omitted and therefore remain unranked. Missing ranking rows mean no expressed opinion, not a last-place ranking. Withdrawal removes that user's current rank for the show, and final withdrawal clears current rankings for the show so future reactivation starts unranked for everyone.
+- Ranking changes auto-save through Worker `/v1/ranking`; active shows may be omitted and therefore remain unranked. Missing ranking rows mean no expressed opinion, not a last-place ranking. Withdrawal removes that user's current rank for the show, and final withdrawal clears current rankings for the show so future reactivation starts unranked for everyone.
 - The current Board aggregate strategy is isolated and identified as `sequential-irv-v1`. Each user's explicit ranked queue is a partial ranked-choice ballot; unranked shows are absent. The Board sequence is produced by repeated instant-runoff elections over active, non-removed shows with at least one retained ranking input. Retained rankings from inactive users still influence the election.
-- Board confirmation is dynamic: active users are those with `is_active = true` and no revoked token, and a show is confirmed only when every currently active user has explicitly ranked it. With zero active users, no result is confirmed. The displayed Board ranking count is active users only; inactive-user contribution counts are not browser-facing.
+- Board confirmation is dynamic: active users have `is_active = true` and an enabled Google mapping, and a show is confirmed only when every currently active user has explicitly ranked it. With zero active users, no result is confirmed. The displayed Board ranking count is active users only; inactive-user contribution counts are not browser-facing.
 - Board cards with fewer than four active-user rankings display a top-right `Votes: N of 4` badge; aggregate scores and voter identities remain hidden.
 - Aggregate ties are deterministic and use canonical IMDb numeric value: strip non-digits, compare arbitrary-precision-safe numeric strings, let the higher value win winner ties, and let the lower value lose elimination ties first.
-- Board refresh uses token-authenticated revision polling when the Board is open, on focus/visibility return, and through a one-minute fallback interval; do not introduce Realtime infrastructure.
+- Board refresh uses session-authenticated revision polling when the Board is open, on focus/visibility return, and through a one-minute fallback interval; do not introduce Realtime infrastructure.
 - Enrolled posters and selected card artwork are retained in the `fff-artwork` R2 bucket under deterministic `posters/` and `card-art/` paths. Browser reads are served by the Worker; browser uploads are not permitted.
-- Weekly metadata refresh runs from the Worker Cron Trigger at `02:00 UTC` each Wednesday. It processes active, non-removed shows due for refresh through TVmaze, retains known values on provider failures, and records sanitized failure status.
-- Weekly order reminders are implemented as a trusted Edge Function, service-role RPC helper, and schedule template. The function accepts service-role authorization or `ORDER_REMINDER_SECRET`, reads recipient names, email addresses, and personal bearer links only from Supabase secrets, preferring `ORDER_REMINDER_RECIPIENTS_B64` over `ORDER_REMINDER_RECIPIENTS_JSON`, sends through Resend, supports trusted manual single-user tests through a `recipient_names` request array, and skips active users who have no active unranked shows. The fixed schedule target is Wednesday 12:00 AEST, represented as `02:00 UTC`.
-- All app tables must have RLS enabled. `anon` must not receive direct read/write grants. Privileged functions must use safe `search_path` settings and validate link tokens internally.
+- Weekly metadata refresh is configured for `02:00 UTC` Wednesday. The live trigger is not currently visible/unconfirmed; deployment may register it and enable scheduled D1/R2 writes, which needs explicit approval. It processes active non-removed due shows through TVmaze and records sanitized failures; it does not send email reminders.
+- Historical weekly order reminders remain in Supabase source. Their participant-link content is obsolete; cutover must retire or replace those links and audit any still-reachable historical bearer APIs, with separate approval for live Supabase operations.
+- D1 access is exclusively through Worker authorization; it has no Postgres RLS. Historical Supabase tables retain RLS/grant/search_path protections and must not be reopened as a runtime fallback.
 
 Add only decisions that materially guide future work. Examples include:
 

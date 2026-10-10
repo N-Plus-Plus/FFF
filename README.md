@@ -1,25 +1,16 @@
-# FFF TV Ranking
+# Wire Wednesday
 
-FFF TV Ranking is a static, mobile-first GitHub Pages app for a known group to nominate television series, keep private personal orders, and view a strict aggregate Board sequence.
+A mobile-first shared TV catalogue, private participant orders, and a strict aggregate watch sequence. The existing `fff-api` Worker is prepared to serve `https://wirewednesday.nissen.nexus` using Static Assets, existing D1 `fff`, and R2 `fff-artwork`. This is uncommitted local preparation; no production cutover has occurred.
 
-## Access and Privacy
+## Access and privacy
 
-Users are manually created outside the ordinary app and receive a permanent secret URL containing `?u=<link_token>`. The token is a bearer credential. The database stores only SHA-256 token hashes, and browser RPCs never return raw tokens or token hashes.
+Google sign-in completely replaces participant links. Only an active existing participant with an enabled, explicit Google-subject mapping can access the application, its modules, artwork or data. No public registration, automatic participant creation, email-only matching, legacy-link fallback, cross-origin API access or browser-supplied actor IDs exist. Historical link columns remain inert in D1 to avoid destructive schema rebuilding.
 
-Every ordinary screen, including the Board, requires a valid active user link. Browser code uses narrow Supabase RPCs only; direct anonymous table access to application data is not granted. Users can see their own ranking sequence, their own nomination state, and aggregate Board results. They cannot retrieve another user's personal ranking. Nominator display names are not exposed through browser RPCs or the UI.
+Google credentials are verified server-side with `jose`, including signature, issuer, audience, expiry, verified email and a single-use browser-bound nonce. The anonymous sign-in page uses Google's official responsive `outline_dark` button following CanBan's current `frontend/SignIn.tsx`. Its Google SDK is the sole external script allowed on that document. The authenticated app uses locally packaged Lucide and Lexend Deca, with no external scripts. Existing fonts/icons retain their visual system.
 
-The administrator is also an ordinary participant and may nominate and rank shows. Active users count toward Board confirmation. Deactivated users and revoked link tokens cannot resolve the app link, read app data, nominate, reorder, or access the Board, but their retained explicit rankings continue contributing to aggregate order unless another lifecycle rule clears them. The Board displays only active-user ranking participation.
+Sessions use random opaque cookies, storing only hashes in D1. Production cookies are HttpOnly, Secure and host-only; remembered login lasts at most 30 days. Unchecked remember uses a browser-session cookie with a 12-hour server expiry. Logout deletes the session. Approval changes invalidate sessions immediately; deactivation blocks them on every request. Mutations require the configured same origin. Private responses are no-store, and referrers are suppressed. Operator logging/cache review is still required before deployment.
 
-Service-role-only user helpers:
-
-```sql
-select public.admin_activate_known_user('USER_UUID');
-select public.admin_deactivate_known_user('USER_UUID');
-select public.admin_revoke_user_link('USER_UUID');
-select public.admin_rotate_user_link('USER_UUID', 'https://your-org.github.io/fff');
-```
-
-These helpers are not callable through the browser anon role.
+The session selects one existing participant ID. Their nominations, rankings, admin status and history stay attached to that ID. Other participants' personal order and identities are not returned. Inactive or unapproved participants' retained ballots still influence aggregate order, while only active approved participants count toward confirmation.
 
 ## Product Rules
 
@@ -31,22 +22,15 @@ Shows remain active while at least one nomination is active. When the final acti
 
 Administrators can remove an active show from the ordinary app. Removal is reversible, records who removed it and when, and hides the show from Nominate, Rank, List, Watch, and search-as-catalogue results. There is no in-app removed-show history or restore UI.
 
-Database-only restoration helper:
-
-```sql
-select public.admin_restore_show(p_show_id => 'SHOW_UUID');
-select public.admin_restore_show(p_imdb_id => 'tt14452776');
-```
-
-Run restoration only from an administrator-controlled database or service-role context. Restoration clears the administrative removal marker on the canonical record only. It does not restore prior active nominations or prior current rankings, so the show remains inactive until a user nominates it again.
+Restoration remains an operator-controlled database operation, with no in-app restore UI. Preserve established restoration semantics: clear the removal marker, withdraw prior nominations and clear current ranking rows so reactivation starts unranked.
 
 ## Ordering and Board
 
-Rank contains only shows the current user has not ranked. With more than one, the user chooses a show before entering placement mode; its full show card is the actual centre element between clipped compact-row lanes above and below it. A vertical swipe transfers one compact row across that centre boundary at a time, while the proposed rank shows where confirmation will insert the show, including before #1 and after the final item. The List tab contains the current ranked sequence and retains arrow controls, removal, and secondary tap-hold reordering for small corrections. Newly nominated active shows remain unranked for every user and do not create ranking rows until explicitly placed. Ranked positions are strict, unique, contiguous, and transactionally replaced through `replace_user_ranking`.
+Rank contains only shows the current user has not ranked. With more than one, the user chooses a show before entering placement mode; its full show card is the actual centre element between clipped compact-row lanes above and below it. A vertical swipe transfers one compact row across that centre boundary at a time, while the proposed rank shows where confirmation will insert the show, including before #1 and after the final item. The List tab contains the current ranked sequence and retains arrow controls, removal, and secondary tap-hold reordering for small corrections. Newly nominated active shows remain unranked for every user and do not create ranking rows until explicitly placed. Ranked positions are strict, unique, contiguous, and transactionally replaced through Worker `/v1/ranking`.
 
 The app persistently reminds valid users when they have active unranked shows: the Rank tab shows a count, while a non-blocking banner with a direct Rank action remains visible across Nominate, List, and Watch. It is deliberately hidden while Rank is open. The banner has a dismiss control, and dismissal lasts only for the current browser session through `sessionStorage`. The reminder returns in a new browser session or when session state is cleared.
 
-The current aggregate strategy is `sequential-irv-v1`, implemented in `ranking.js` and SQL `calculate_provisional_board`. Each user's ranked queue is a partial ranked-choice ballot. Unranked shows are absent from that user's ballot and never count as a synthetic last-place preference.
+The current aggregate strategy is `sequential-irv-v1`, implemented in `ranking.js` and the Cloudflare Worker. Each user's ranked queue is a partial ranked-choice ballot. Unranked shows are absent from that user's ballot and never count as a synthetic last-place preference.
 
 The Board candidate set contains active, non-removed shows with at least one retained explicit ranking. Rankings retained from inactive users continue contributing to the election, but inactive users do not count toward confirmation and are not included in the displayed "ranked by" count.
 
@@ -57,7 +41,7 @@ The ordinary Board displays the aggregate sequence without aggregate scores or a
 Confirmation is dynamic. For every Board calculation:
 
 ```text
-activeUserCount = users where is_active = true and token_revoked_at is null
+activeUserCount = participants where is_active = true and Google approval is enabled
 confirmed = activeUserCount > 0 and rankedActiveUserCount >= activeUserCount
 ```
 
@@ -67,7 +51,7 @@ Aggregate ties are broken deterministically by canonical IMDb numeric value. Rem
 
 ## Metadata and Cards
 
-Canonical identity is always IMDb. The browser calls the `imdb` Edge Function for search, lookup, and enrolment. TVmaze is the primary television metadata provider and requires no API key. The Edge Function searches `https://api.tvmaze.com/search/shows?q={query}`, resolves exact canonical IMDb IDs with `https://api.tvmaze.com/lookup/shows?imdb={imdbId}`, retains the numeric TVmaze show ID, retrieves episodes from `https://api.tvmaze.com/shows/{tvmazeId}/episodes`, and retrieves card artwork from `https://api.tvmaze.com/shows/{tvmazeId}/images`. Card artwork selection considers usable `background` originals and `banner` originals (or medium banners), then selects the horizontal image closest to FFF's panoramic card-art ratio. `main: true` breaks an aspect-ratio tie, followed by source resolution. The normal portrait poster and then the local placeholder remain fallbacks.
+Canonical identity is always IMDb. The browser calls Worker `/v1/metadata` for search, lookup and enrolment. TVmaze is the primary television metadata provider and requires no API key. The Worker searches `https://api.tvmaze.com/search/shows?q={query}`, resolves exact canonical IMDb IDs with `https://api.tvmaze.com/lookup/shows?imdb={imdbId}`, retains the numeric TVmaze show ID, retrieves episodes from `https://api.tvmaze.com/shows/{tvmazeId}/episodes`, and retrieves card artwork from `https://api.tvmaze.com/shows/{tvmazeId}/images`. Card artwork selection considers usable `background` originals and `banner` originals (or medium banners), then selects the horizontal image closest to FFF's panoramic card-art ratio. `main: true` breaks an aspect-ratio tie, followed by source resolution. The normal portrait poster and then the local placeholder remain fallbacks.
 
 Canonical identity comes from TVmaze's `externals.imdb` field. Search results without an IMDb ID are rejected. Supported normalized metadata fields are canonical IMDb ID, title, premiered year, ended year, TVmaze type, series status, TVmaze rating, season count when available, episode count, cumulative runtime when every TVmaze episode has an explicit runtime, poster source URL, selected card artwork URL/type/dimensions, background URL and dimensions when horizontal artwork exists, source provider identity, TVmaze record ID, and retrieval timestamp. The app does not store or display synopsis, genre, or estimated cumulative runtime.
 
@@ -77,185 +61,34 @@ TVmaze data is licensed under CC BY-SA. The current app shell does not render pr
 
 Show cards stay restrained: stored card artwork when available, title linked to IMDb when available, commenced year or ended year range, season and episode count when known, exact total runtime when known, rank or aggregate position, and required actions. The List view alone overlays TVmaze's `/10` rating as five Straw SVG stars, rounded to the nearest half-star. Runtime is labelled "Total Runtime" and is displayed only when exact/provider-supplied; estimated cumulative runtime is not derived or shown. Nominate, Rank, List, and Watch all use the same selected card-art asset and background renderer with a dark text overlay; poster fallback behaviour remains intact when no horizontal artwork exists. On load, rendered card backgrounds are checked against the current TVmaze selection, so stale persisted artwork—including an older background-first choice—is safely replaced through the metadata boundary.
 
-## Poster Storage
+## Local development and verification
 
-Stored poster assets use the Supabase Storage bucket:
+Use existing npm tooling; no frontend framework or transpilation is introduced. `jose` 6.2.12 verifies Google credentials in the Worker; `lucide` 1.55.0 and `@fontsource/lexend-deca` 5.3.0 are pinned packaging inputs. Asset preparation copies 19 explicitly allowlisted files, including their licenses, into ignored `cloudflare/public/`. It never publishes the repository or environment files.
 
-```text
-show-posters
+The ignored root `.env.vars` is the local Google configuration source. Start Wrangler with that explicit file:
+
+```powershell
+npm ci --ignore-scripts
+node cloudflare/scripts/prepare-assets.mjs
+npx.cmd wrangler d1 migrations apply DB --local --persist-to .wrangler/hosting-local
+npx.cmd wrangler dev --local --local-upstream 127.0.0.1:3000 --env-file .env.vars --port 3000 --var APP_ORIGIN:http://127.0.0.1:3000 --var LOCAL_DEMO:true --persist-to .wrangler/hosting-local --log-level warn
 ```
 
-The bucket is configured as public-read because poster images themselves are non-secret, while application data still requires a valid user link. Browser code has no upload policy. Trusted server-side code, normally the IMDb or metadata-refresh Edge Function with `SUPABASE_SERVICE_ROLE_KEY`, creates or replaces poster objects at deterministic paths such as `posters/tt14452776.jpg`.
+Visit `http://127.0.0.1:3000/?demo=1` for synthetic local demo data. Demo mode is restricted to an explicitly enabled loopback origin; it is unavailable on production. Plain Python serving no longer represents authenticated hosting. Add the exact localhost origin to Google's authorised JavaScript origins for real local sign-in; use only separately approved synthetic local mappings. Do not copy production data into local tests.
 
-Before storing an upstream poster or selected card artwork, trusted code validates HTTP/HTTPS URL schemes, uses bounded timeouts, limits redirects, enforces a 5 MB maximum, accepts only JPEG/PNG/WebP content types, rejects HTML or unexpected payloads, and never uses remote filenames or browser-supplied destination paths. Poster or card-art copy failure records a status when possible and does not block nomination or metadata refresh.
+Run:
 
-## Realtime Invalidation
-
-Board updates use Supabase Realtime invalidation through `public.board_revision_public`, a single-row source containing only:
-
-```text
-revision
-updated_at
-```
-
-No user IDs, display names, show IDs, titles, nominations, ranking positions, tokens, or administrative state are exposed through Realtime. Receiving a newer revision only causes the client to call token-authenticated RPCs. The app also refreshes when the Board opens, on focus/visibility return, and through a one-minute fallback poll if Realtime is unavailable.
-
-Revisions advance when catalogue activity, nomination counts, personal rankings, Board confirmation state, user activation or deactivation, administrative removal or restoration, card metadata, or stored poster availability changes.
-
-## Local Setup
-
-Serve the static files with any local web server:
-
-```bash
-.\start-local-server.bat
-```
-
-Demo mode is explicit and local only:
-
-```text
-http://localhost:3000/?demo=1
-```
-
-The batch file serves the repository on `0.0.0.0:3000`, prints the local URL, and shows the LAN URL pattern for testing from another device on the same network. If Windows Firewall prompts for Python, allow private-network access for device testing.
-
-When testing live Supabase Edge Function calls from another device, the LAN origin printed by the batch file, such as `http://192.168.1.23:3000`, must also be present in the deployed `ALLOWED_ORIGINS` secret. Localhost and `127.0.0.1` testing on this computer are covered by the Edge Function's built-in loopback-origin allowance, regardless of the local server port.
-
-For a repeatable narrow-viewport check of Rank placement, install the development tools once with `npm install` and `npx playwright install chromium`, keep the local server running, then run `node scripts/placement-browser-test.mjs`. It uses an isolated `?demo=1` browser state and writes an ignored screenshot for visual inspection.
-
-Production mode does not fall back to demo data. `config.js` must contain only:
-
-```js
-export const APP_CONFIG = {
-  supabaseUrl: "https://PROJECT_REF.supabase.co",
-  supabaseAnonKey: "PUBLISHABLE_OR_ANON_KEY"
-};
-```
-
-## Supabase Setup
-
-Supabase deployment uses the local migrations, Edge Functions, Storage bucket configuration, and Realtime publication changes in `supabase/`. Do not run linked resets. Before remote changes, confirm the linked project reference, inspect remote migration history and existing data, and stop if the remote project contains unexpected unrelated application data.
-
-Initial deployment steps:
-
-```bash
-npx.cmd supabase login
-npx.cmd supabase link --project-ref PROJECT_REF
-npx.cmd supabase migration list
-npx.cmd supabase db push --dry-run --linked --yes
-npx.cmd supabase db push --linked --yes
-npx.cmd supabase functions deploy imdb metadata-refresh --project-ref PROJECT_REF --no-verify-jwt --use-api
-```
-
-Do not run `supabase db reset` against a linked remote project. Migration files under `supabase/migrations/` are authoritative. `supabase-schema.sql` is only a historical pointer.
-
-## Edge Function and Provider Secrets
-
-The browser calls `supabase/functions/imdb` for search, lookup, and enrolment. Enrolment validates the user link, resolves canonical metadata through TVmaze, optionally enriches safely through TVDB, creates or reuses the canonical show through RPC, attempts poster copy into Storage, records poster status, and completes nomination even if poster copy fails safely.
-
-Required or supported secrets:
-
-```bash
-supabase secrets set ALLOWED_ORIGINS="https://n-plus-plus.github.io,http://<LAN_IP>:3000"
-supabase secrets set IMDB_TIMEOUT_MS="8000"
-supabase secrets set TVDB_IMDB_URL_TEMPLATE="https://tvdb-provider.example/by-imdb/{imdbId}"
-supabase secrets set TVDB_API_KEY="..."
-supabase secrets set TVDB_API_KEY_HEADER="Authorization"
-supabase secrets set TVDB_TIMEOUT_MS="8000"
-supabase secrets set METADATA_REFRESH_SECRET="..."
-supabase secrets set ORDER_REMINDER_SECRET="..."
-supabase secrets set ORDER_REMINDER_RECIPIENTS_JSON='[{"name":"Troy","email":"...","link":"https://..."},{"name":"Shane","email":"...","link":"https://..."},{"name":"Aislinn","email":"...","link":"https://..."},{"name":"Jess","email":"...","link":"https://..."}]'
-supabase secrets set ORDER_REMINDER_RECIPIENTS_B64="BASE64_ENCODED_JSON_RECIPIENT_ARRAY"
-supabase secrets set RESEND_API_KEY="..."
-supabase secrets set ORDER_REMINDER_FROM="FFF <notifications@example.com>"
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY="..."
-```
-
-TVmaze is the active primary provider. It is public HTTPS, needs no API key, and remains behind the Edge Function boundary. `IMDB_TIMEOUT_MS` is retained as the shared primary-provider timeout knob despite the historical prefix.
-
-## Weekly Metadata Refresh
-
-The repository includes a schedule-ready weekly metadata refresh workflow:
-
-- Edge Function: `supabase/functions/metadata-refresh`
-- Migration helpers: `admin_list_metadata_refresh_candidates` and `admin_update_show_metadata`
-- Schedule template: `supabase/schedules/metadata-refresh-weekly.sql`
-
-The refresh function is trusted-schedule-only, rejects ordinary browser invocation, accepts either service-role authorization or `METADATA_REFRESH_SECRET`, processes active canonical shows that are not administratively removed, refreshes records whose last successful metadata refresh is at least seven days old, uses TVmaze first, invokes TVDB only as strict fallback enrichment with an explicit matching IMDb cross-reference, retains existing values when upstream temporarily fails, updates metadata atomically per show, refreshes posters only when needed, limits concurrency by processing sequentially with a bounded batch size, uses bounded timeouts, and logs only sanitized summary counts.
-
-After Supabase is linked and secrets are configured, apply scheduling deliberately. Replace placeholders in `supabase/schedules/metadata-refresh-weekly.sql`; do not commit real schedule secrets or service-role keys.
-
-## Weekly Order Reminders
-
-The repository includes a schedule-ready weekly ordering reminder workflow:
-
-- Edge Function: `supabase/functions/weekly-order-reminders`
-- Migration helper: `admin_list_order_reminder_recipients`
-- Schedule template: `supabase/schedules/weekly-order-reminders.sql`
-
-The reminder function is trusted-schedule-only, rejects ordinary browser invocation, accepts either service-role authorization or `ORDER_REMINDER_SECRET`, reads recipient names, email addresses, and personal bearer links from `ORDER_REMINDER_RECIPIENTS_B64` or the `ORDER_REMINDER_RECIPIENTS_JSON` Supabase secret, and sends through Resend using `RESEND_API_KEY` and `ORDER_REMINDER_FROM`. It queries active users and skips any user who has ranked every active, non-removed show that has at least one active nomination. The template deliberately sends no email when there is nothing for that user to order.
-
-For a manual single-user test, invoke the function with a trusted authorization header and a body such as `{"recipient_names":["Troy"]}`. The weekly schedule omits this body field, so scheduled runs still evaluate all configured recipients. Add `"dry_run":true` to validate the recipient filter without sending email.
-
-The schedule template runs at `02:00 UTC` every Wednesday, which is `12:00 AEST`. During Sydney daylight saving time, this fixed AEST schedule fires at `13:00 AEDT`.
-
-## RPC Contract
-
-Browser-callable RPCs all accept `p_link_token` and validate it internally:
-
-- `resolve_current_user(text)`
-- `list_catalogue(text)`
-- `nominate_imdb_show(text, text, text, integer, text, text, text, jsonb)`
-- `withdraw_nomination(text, uuid)`
-- `admin_remove_show(text, uuid)`
-- `get_user_order(text)`
-- `replace_user_ranking(text, uuid[])`
-- `get_board(text)`
-- `get_board_revision(text)`
-
-Administrator/database helpers are not granted to `anon`:
-
-- `admin_create_known_user(text, boolean, text)`
-- `admin_rotate_user_link(uuid, text)`
-- `admin_revoke_user_link(uuid)`
-- `admin_activate_known_user(uuid)`
-- `admin_deactivate_known_user(uuid)`
-- `admin_restore_show(uuid, text)`
-- `admin_record_show_poster_result(uuid, text, text, text)`
-- `admin_list_metadata_refresh_candidates(integer)`
-- `admin_update_show_metadata(uuid, jsonb)`
-- `admin_list_order_reminder_recipients()`
-
-## Current Remote Deployment Status
-
-The local repository is linked to Supabase project `ckzarkkjosckoegswakf` (`FFF`). Local migrations through `20260718000100` have been applied to the remote project. The `show-posters` Storage bucket is deployed as public-read without a broad listing policy, Realtime is configured only for `public.board_revision_public`, and the `imdb`, `metadata-refresh`, and `weekly-order-reminders` Edge Functions are deployed with JWT pre-verification disabled so their code-level token checks own authorization. `ALLOWED_ORIGINS` must include the GitHub Pages origin plus any LAN origins used for local live testing; loopback localhost origins are allowed in code. Weekly metadata refresh is not currently scheduled. Weekly order reminders are scheduled for Wednesday 12:00 AEST, but require Resend email secrets before they can send.
-
-Remaining manual deployment work:
-
-- TVmaze primary provider is configured in code and requires no API key or URL-template secrets.
-- Optional TVDB provider secrets/templates are not configured.
-- The first launch users have been created in the remote database. Share secret user links out-of-band; do not record raw tokens in source or documentation.
-- The weekly metadata-refresh cron schedule has not been configured.
-- Resend email secrets have not been configured for weekly order reminders.
-
-## Verification
-
-Local checks that do not require a linked Supabase project:
-
-```bash
-node --check app.js
-node --check store.js
-node --check providers.js
-node --check ranking.js
-node --check scripts/verify-contracts.mjs
+```powershell
 node scripts/verify-contracts.mjs
+node cloudflare/tests/session-hash.test.mjs
+node cloudflare/tests/hosting.test.mjs
+node cloudflare/tests/auth-browser.test.mjs
 ```
 
-Edge Function syntax can be checked when Deno is installed:
+The auth tests self-host local Worker handlers with disposable local D1/R2, signed mock Google identities and mocked TVmaze. With local Wrangler running, also run `node scripts/hosting-browser-test.mjs` and `node scripts/placement-browser-test.mjs`. Optional `node scripts/review-google-button.mjs` reads only the public client ID from `.env.vars`, serves local bytes and fetches the public Google SDK in an anonymous context to review the official button at 320/360/390/768/1440px; it never signs in or contacts production APIs. Its artifacts are ignored.
 
-```bash
-deno check supabase/functions/imdb/index.ts
-deno check supabase/functions/metadata-refresh/index.ts
-deno check supabase/functions/weekly-order-reminders/index.ts
-```
+## Operations and deployment
 
-Remote deployment can be verified with `npx.cmd supabase migration list`, `npx.cmd supabase functions list`, focused `supabase db query --linked` checks for Storage/Realtime/cron, and live Edge Function smoke calls.
+See [cloudflare/DEPLOYMENT.md](cloudflare/DEPLOYMENT.md) for Google setup, operator-only mapping review, forward migration, cutover, verification and rollback. Establish mappings before announcing sign-in availability. GitHub Pages and workers.dev can be retired during the approved cutover; old credentials have no meaning in the new application.
+
+`wrangler.jsonc` retains `0 2 * * 3` for weekly TVmaze metadata refresh. Its live status is unconfirmed because it is not currently visible in Cloudflare. Deployment can register this trigger and enable future scheduled D1/R2 writes; approve that explicitly. This is not an ordering-reminder schedule. The retained Supabase source is historical and must not be deployed as an alternate authentication path. Any historical reminder service must have its participant-link content retired or replaced with the plain canonical sign-in URL before cutover; whether to keep/rework that service requires operator review.

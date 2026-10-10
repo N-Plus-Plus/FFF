@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Wire Wednesday</title>
+    <link rel="icon" href="/fav.png">
+    <link rel="stylesheet" href="/style.css">
+    <script src="/login.js" defer></script>
+  </head>
+  <body>
+    <main class="login-panel">
+      <h1>Wire Wednesday</h1>
+      <p>Sign in with your approved Google account.</p>
+      <p id="loginMessage" class="notice" role="status" hidden></p>
+      <label class="remember-choice"><input id="rememberMe" type="checkbox" checked> Remember me on this device for 30 days</label>
+      <div id="googleButton" class="google-button" aria-label="Google sign-in" aria-busy="false"></div>
+      <p id="signInStatus" role="status" hidden>Signing in…</p>
+      <button id="retryGoogle" class="button button--neutral" type="button" hidden>Retry sign-in</button>
+      <p class="login-help">Access is limited to approved participants. Contact the operator if your account needs approval.</p>
+    </main>
+  </body>
+</html>

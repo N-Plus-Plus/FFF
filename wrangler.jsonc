@@ -3,7 +3,8 @@
   "name": "fff-api",
   "main": "cloudflare/src/index.js",
   "compatibility_date": "2026-09-19",
-  "workers_dev": true,
+  "workers_dev": false,
+  "observability": { "enabled": false },
   "d1_databases": [{
     "binding": "DB",
     "database_name": "fff",
@@ -13,6 +14,22 @@
   "r2_buckets": [{ "binding": "ARTWORK", "bucket_name": "fff-artwork" }],
   "triggers": { "crons": ["0 2 * * 3"] },
   "vars": {
-    "ALLOWED_ORIGINS": "https://n-plus-plus.github.io,http://localhost:3000,http://127.0.0.1:3000"
+    "APP_ORIGIN": "https://wirewednesday.nissen.nexus"
+  },
+  "routes": [
+    {
+      "pattern": "wirewednesday.nissen.nexus",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./cloudflare/public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "build": {
+    "command": "node cloudflare/scripts/prepare-assets.mjs"
   }
 }

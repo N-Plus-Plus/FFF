@@ -5,6 +5,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 
 await page.goto("http://127.0.0.1:3000/?demo=1");
+await page.waitForFunction(() => localStorage.getItem("fff.localDemo.v4") && document.querySelector("#userBadge")?.textContent !== "Loading");
 await page.evaluate(() => {
   const key = "fff.localDemo.v4";
   const state = JSON.parse(localStorage.getItem(key));

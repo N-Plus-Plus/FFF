@@ -132,7 +132,7 @@ function uniqueKnownIds(showIds, showById) {
 }
 
 function isUserCurrentlyActive(user) {
-  return user.isActive !== false && !user.tokenRevokedAt;
+  return user.isActive !== false;
 }
 
 function imdbNumericComponent(value) {

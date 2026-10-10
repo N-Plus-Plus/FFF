@@ -11,3 +11,7 @@ cloudflare/private-*.json
 cloudflare/private-*.sql
 cloudflare/artwork-tmp/
 playwright-placement.png
+
+cloudflare/public/
+.dev.vars
+.dev.vars.*

@@ -250,7 +250,7 @@ async function verifyDemoStore() {
   assert.ok(board.entries.some((entry) => entry.rankedCount === entry.rankedActiveUserCount), "displayed ranked count is active users only");
   assert.ok(board.entries.every((entry) => entry.activeUserCount === 3), "deactivated users are excluded from confirmation denominator");
 
-  await assert.rejects(() => store.load("demo-riley"), /inactive user link/i, "deactivated user cannot read app data");
+  await assert.rejects(() => store.load("demo-riley"), /inactive demo participant/i, "deactivated user cannot read app data");
   await store.adminSetUserActive("demo-admin", "demo-riley", true);
   const reactivatedBoard = await store.getBoard("demo-admin");
   assert.ok(reactivatedBoard.entries.some((entry) => !entry.isConfirmed), "reactivation can make results unconfirmed");

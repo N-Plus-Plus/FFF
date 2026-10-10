@@ -1,3 +1,4 @@
+import { apiRequest } from "./api.js";
 import { APP_CONFIG } from "./config.js";
 import { createDataStore, isApiConfigured } from "./store.js";
 import { createMetadataProvider, normalizeProviderTitle, parseImdbId } from "./providers.js";
@@ -10,6 +11,7 @@ const REMINDER_DISMISSED_KEY = "fff.unrankedReminder.dismissed";
 
 const dom = {
   userBadge: document.querySelector("#userBadge"),
+  logoutForm: document.querySelector("#logoutForm"),
   appNotice: document.querySelector("#appNotice"),
   addForm: document.querySelector("#addForm"),
   titleInput: document.querySelector("#titleInput"),
@@ -36,7 +38,7 @@ const dom = {
 };
 
 const appState = {
-  token: readUserToken(),
+  demoParticipant: "demo-admin",
   demoMode: isDemoMode(),
   currentUser: null,
   shows: [],
@@ -78,7 +80,6 @@ const appState = {
 const dataStore = createDataStore(APP_CONFIG, { demoMode: appState.demoMode });
 const metadataProvider = createMetadataProvider({
   config: APP_CONFIG,
-  token: appState.token,
   demoMode: appState.demoMode
 });
 
@@ -91,12 +92,23 @@ async function init() {
   renderNotice();
   refreshIcons();
   guardConfiguration();
+  if (!appState.demoMode) await apiRequest("/auth/session");
+  dom.logoutForm.hidden = appState.demoMode;
   await loadApp();
   await startBoardRealtime();
   startBoardFallbackPolling();
 }
 
 function bindEvents() {
+  dom.logoutForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await apiRequest("/auth/logout", {});
+      document.querySelector("#app").replaceChildren();
+      sessionStorage.removeItem(REMINDER_DISMISSED_KEY);
+      location.replace("/");
+    } catch (error) { showToast(error.message, "error"); }
+  });
   dom.tabs.forEach((tab) => {
     tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
   });
@@ -133,6 +145,14 @@ function bindEvents() {
   });
   window.addEventListener("online", () => startBoardRealtime());
   window.addEventListener("beforeunload", teardownRealtime);
+  const checkSession = () => {
+    if (!appState.demoMode && !document.hidden) apiRequest("/auth/session").catch(() => {});
+  };
+  window.addEventListener("focus", checkSession);
+  document.addEventListener("visibilitychange", checkSession);
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted && !appState.demoMode) location.reload();
+  });
 }
 
 function guardConfiguration() {
@@ -140,16 +160,14 @@ function guardConfiguration() {
     return;
   }
   if (!isApiConfigured(APP_CONFIG)) {
-    throw new Error("FFF API is not configured. Set apiUrl in config.js, or add ?demo=1 for local demo mode.");
+    throw new Error("Wire Wednesday API is not configured. Set apiUrl in config.js, or add ?demo=1 for local demo mode.");
   }
-  if (!appState.token) {
-    throw new Error("Missing user link token. Open the permanent URL containing ?u=<link_token>.");
-  }
+
 }
 
 async function loadApp() {
   setLoading("Loading shared list");
-  const data = await dataStore.load(appState.token);
+  const data = await dataStore.load(appState.demoParticipant);
   appState.currentUser = data.currentUser;
   appState.shows = data.shows;
   appState.removedShows = data.removedShows;
@@ -259,7 +277,7 @@ async function searchShows() {
 async function nominateResult(result) {
   showLoadingOverlay();
   try {
-    const saved = await dataStore.nominate(appState.token, result);
+    const saved = await dataStore.nominate(appState.demoParticipant, result);
     upsertActiveShow(saved);
     await reloadOrderAndCatalogue();
     render();
@@ -281,7 +299,7 @@ function clearSearch() {
 
 async function withdrawNomination(showId) {
   try {
-    const show = await dataStore.withdraw(appState.token, showId);
+    const show = await dataStore.withdraw(appState.demoParticipant, showId);
     await reloadOrderAndCatalogue();
     render();
     showToast(`${show.title} withdrawn.`, "success");
@@ -292,7 +310,7 @@ async function withdrawNomination(showId) {
 
 async function removeShow(showId) {
   try {
-    const show = await dataStore.removeShow(appState.token, showId);
+    const show = await dataStore.removeShow(appState.demoParticipant, showId);
     await reloadOrderAndCatalogue();
     await refreshBoard("Removed show");
     render();
@@ -304,8 +322,8 @@ async function removeShow(showId) {
 
 async function reloadOrderAndCatalogue() {
   const [catalogue, order] = await Promise.all([
-    dataStore.listCatalogue(appState.token),
-    dataStore.getOrder(appState.token)
+    dataStore.listCatalogue(appState.demoParticipant),
+    dataStore.getOrder(appState.demoParticipant)
   ]);
   appState.shows = catalogue.shows;
   appState.removedShows = catalogue.removedShows;
@@ -1074,7 +1092,7 @@ async function flushSaveQueue() {
   renderSaveStatus();
 
   try {
-    const result = await dataStore.replaceRanking(appState.token, sequence);
+    const result = await dataStore.replaceRanking(appState.demoParticipant, sequence);
     if (appState.saveVersion === version) {
       appState.ranked = result.ranked;
       appState.unranked = result.unranked;
@@ -1122,7 +1140,7 @@ async function refreshBoard(reason) {
       if (reason) {
         dom.boardStatus.textContent = `${reason}; refreshing`;
       }
-      appState.board = await dataStore.getBoard(appState.token);
+      appState.board = await dataStore.getBoard(appState.demoParticipant);
       renderBoard();
     } catch (error) {
       dom.boardStatus.textContent = "Board refresh failed";
@@ -1435,14 +1453,9 @@ function htmlToElement(markup) {
   return template.content.firstElementChild;
 }
 
-function readUserToken() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("u") || (isDemoMode() ? "demo-admin" : "");
-}
-
 function isDemoMode() {
   const params = new URLSearchParams(window.location.search);
-  return params.get("demo") === "1" || params.get("demo") === "true";
+  return ["localhost", "127.0.0.1"].includes(location.hostname) && params.get("demo") === "1";
 }
 
 function showToast(message, kind = "info") {
