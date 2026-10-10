@@ -37,6 +37,24 @@ const dom = {
   panels: Array.from(document.querySelectorAll("[data-panel]"))
 };
 
+function updatePageArtworkCredit(panel) {
+  let credit = panel.querySelector(":scope > .page-artwork-credit");
+  const displayed = Array.from(panel.querySelectorAll('[data-fanart="true"] img')).some((image) =>
+    !image.closest("[hidden]") && (image.complete && image.naturalWidth > 0));
+  if (!credit && displayed) {
+    credit = document.createElement("p");
+    credit.className = "page-artwork-credit";
+    credit.innerHTML = 'Banner artwork: <a href="https://fanart.tv/" target="_blank" rel="noopener noreferrer">fanart.tv</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>. Black gradient overlaid for readability.';
+    panel.append(credit);
+  }
+  if (credit && credit.hidden === displayed) credit.hidden = !displayed;
+}
+for (const panel of dom.panels) {
+  new MutationObserver(() => updatePageArtworkCredit(panel)).observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+  panel.addEventListener("load", () => updatePageArtworkCredit(panel), true);
+  panel.addEventListener("error", () => updatePageArtworkCredit(panel), true);
+}
+
 const appState = {
   demoParticipant: "demo-admin",
   demoMode: isDemoMode(),
@@ -483,7 +501,7 @@ async function openArtworkPicker(show, trigger) {
   dialog.innerHTML = `<div class="artwork-dialog__heading"><h2 id="artworkHeading">Artwork for ${escapeHtml(show.title)}</h2><button class="icon-button" type="button" aria-label="Close artwork selector"><i data-lucide="x" aria-hidden="true"></i></button></div>
     <p class="artwork-status" role="status">Loading banners…</p><div class="artwork-options"></div>
     <p class="artwork-credit">Banners: <a href="https://fanart.tv/" target="_blank" rel="noopener noreferrer">fanart.tv</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>. Displayed without edits.</p>
-    <div class="button-row"><button class="button button--constructive" type="button" data-save disabled>Save selection</button><button class="button button--neutral" type="button" data-retry hidden>Retry</button></div>`;
+    <div class="button-row"><button class="button button--constructive" type="button" data-save disabled><i data-lucide="save" aria-hidden="true"></i><span>Save</span></button><button class="button button--neutral" type="button" data-retry hidden><i data-lucide="rotate-cw" aria-hidden="true"></i><span>Retry</span></button></div>`;
   document.body.append(dialog);
   const close = dialog.querySelector('[aria-label="Close artwork selector"]');
   const status = dialog.querySelector(".artwork-status"), options = dialog.querySelector(".artwork-options");
@@ -507,13 +525,26 @@ async function openArtworkPicker(show, trigger) {
         options.append(current);
       }
       data.banners.forEach((banner, index) => {
-        const label = document.createElement("label"); label.className = "artwork-option";
-        label.innerHTML = `<input type="radio" name="banner" value="${escapeAttribute(banner.id)}"><span>Banner ${index + 1}${banner.lang ? ` (${escapeHtml(banner.lang)})` : ""}${banner.id === data.selectedId ? " · Currently selected" : ""}</span><img src="${escapeAttribute(banner.url)}" alt="Banner ${index + 1} for ${escapeAttribute(show.title)}" loading="lazy">`;
-        const radio = label.querySelector("input"); radio.checked = banner.id === data.selectedId;
-        if (radio.checked) chosen = banner.id;
-        radio.onchange = () => { chosen = banner.id; save.disabled = false; };
-        label.querySelector("img").onerror = () => { radio.disabled = true; label.classList.add("artwork-option--failed"); label.querySelector("span").textContent += " · Preview unavailable"; if (chosen === banner.id) { chosen = ""; save.disabled = true; } };
-        options.append(label);
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "artwork-option";
+        option.setAttribute("aria-label", `Banner ${index + 1} for ${show.title}${banner.lang ? ` (${banner.lang})` : ""}`);
+        option.setAttribute("aria-pressed", String(banner.id === data.selectedId));
+        option.innerHTML = `<img src="${escapeAttribute(banner.url)}" alt="" loading="lazy">`;
+        if (banner.id === data.selectedId) chosen = banner.id;
+        option.onclick = () => {
+          chosen = banner.id;
+          options.querySelectorAll(".artwork-option").forEach((item) => item.setAttribute("aria-pressed", String(item === option)));
+          save.disabled = false;
+        };
+        option.querySelector("img").onerror = () => {
+          option.disabled = true;
+          option.classList.add("artwork-option--failed");
+          option.setAttribute("aria-pressed", "false");
+          option.append(document.createTextNode("Preview unavailable"));
+          if (chosen === banner.id) { chosen = ""; save.disabled = true; }
+        };
+        options.append(option);
       });
       save.disabled = !chosen;
     } catch (error) { if (dialog.isConnected) { status.textContent = error.message; retry.hidden = false; } }
@@ -522,7 +553,7 @@ async function openArtworkPicker(show, trigger) {
   save.onclick = async () => {
     if (!chosen || saving) return;
     saving = true; save.disabled = true; close.disabled = true; retry.hidden = true;
-    options.querySelectorAll("input").forEach((input) => { input.disabled = true; });
+    options.querySelectorAll(".artwork-option").forEach((input) => { input.disabled = true; });
     status.textContent = "Saving banner…";
     let saved = false;
     try {
@@ -536,7 +567,7 @@ async function openArtworkPicker(show, trigger) {
       retry.hidden = saved; save.disabled = saved;
     } finally {
       saving = false; close.disabled = false;
-      options.querySelectorAll(".artwork-option:not(.artwork-option--failed) input").forEach((input) => { input.disabled = false; });
+      options.querySelectorAll(".artwork-option:not(.artwork-option--failed)").forEach((input) => { input.disabled = false; });
     }
   };
   await load();
@@ -1342,10 +1373,10 @@ function titleMarkup(show) {
   const imdbId = show.imdbId || show.imdb_id;
   const title = escapeHtml(show.title);
   if (!imdbId) {
-    return `<p class="show-title">${title}</p>`;
+    return `<p class="show-title" title="${escapeAttribute(show.title)}">${title}</p>`;
   }
   return `
-    <p class="show-title">
+    <p class="show-title" title="${escapeAttribute(show.title)}">
       <a class="show-title__link" href="https://www.imdb.com/title/${escapeAttribute(imdbId)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Open ${escapeAttribute(show.title || "show")} on IMDb">
         ${title}
       </a>
@@ -1362,7 +1393,7 @@ function metadataMarkup(show) {
     episodeCount ? formatEpisodeCount(show, episodeCount) : "",
     runtimeMinutes ? `Total Runtime: ${formatRuntime(runtimeMinutes)}` : ""
   ];
-  return rows.map((row) => `<p class="show-subtitle${row ? "" : " show-subtitle--placeholder"}">${row ? escapeHtml(row) : "&nbsp;"}</p>`).join("");
+  return `<div class="show-details" tabindex="0" aria-label="Show details">${rows.map((row) => `<p class="show-subtitle${row ? "" : " show-subtitle--placeholder"}">${row ? escapeHtml(row) : "&nbsp;"}</p>`).join("")}</div>`;
 }
 
 function ratingStarsMarkup(show) {
@@ -1478,7 +1509,8 @@ function backgroundMarkup(show) {
   if (url) {
     const showId = show.id || show.showId || show.show_id || "";
     const imdbId = show.imdbId || show.imdb_id || "";
-    return `${show.cardArtType === "fanart-tvbanner" || show.card_art_type === "fanart-tvbanner" ? '<span class="card-art-credit"><a href="https://fanart.tv/" target="_blank" rel="noopener noreferrer">fanart.tv</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer" aria-label="CC BY 3.0 banner artwork license; cropped for display">CC BY 3.0</a></span>' : ""}<div class="card-background"><img src="${escapeAttribute(url)}" alt="" draggable="false" data-bg-show-id="${escapeAttribute(showId)}" data-bg-imdb-id="${escapeAttribute(imdbId)}"></div>`;
+    const fanart = show.cardArtType === "fanart-tvbanner" || show.card_art_type === "fanart-tvbanner";
+    return `<div class="card-background"${fanart ? ' data-fanart="true"' : ""}><img src="${escapeAttribute(url)}" alt="" draggable="false" data-bg-show-id="${escapeAttribute(showId)}" data-bg-imdb-id="${escapeAttribute(imdbId)}"></div>`;
   }
   return '<div class="card-background">TV</div>';
 }

@@ -156,29 +156,30 @@ try {
   const page=await context.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
   await page.goto(origin);const edit=page.locator("#catalogueList").getByRole("button",{name:"Edit artwork for Synthetic show"}).first();await edit.waitFor();
   const position=await edit.evaluate(e=>({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,nextLeft:e.nextElementSibling.getBoundingClientRect().left}));assert(position.right<=position.nextLeft,"Edit sits immediately left of nomination action");
-  await edit.click();const dialog=page.getByRole("dialog");await dialog.getByText(/Currently selected/).waitFor();
-  assert.equal(await dialog.getByRole("radio",{checked:true}).inputValue(),"3");
+  await edit.click();const dialog=page.getByRole("dialog");await dialog.locator('.artwork-option[aria-pressed="true"]').waitFor();
+  const pickerData=await (await api("/v1/admin/artwork",admin,{imdbId:"tt90000001"})).json();
+  assert.equal(await dialog.locator('.artwork-option[aria-pressed="true"] img').getAttribute("src"),pickerData.banners.find(b=>b.id==="3").url);
   for(const width of [320,390,768,1440]) {
     await page.setViewportSize({width,height:900});
     const box=await dialog.boundingBox();assert(box.x>=0&&box.x+box.width<=width);
   }
-  await dialog.getByRole("radio").first().check();await dialog.getByRole("button",{name:"Save selection"}).click();await dialog.waitFor({state:"detached"});
+  await dialog.locator(".artwork-option").first().click();await dialog.getByRole("button",{name:"Save"}).click();await dialog.waitFor({state:"detached"});
   const selected=await env.DB.prepare("SELECT card_art_storage_path FROM shows WHERE id=?").bind(showId).first();
   assert((await page.locator('#catalogueList .card-background img').first().getAttribute('src')).includes(selected.card_art_storage_path));
   for(const tab of ["List","Watch"]) {await page.getByRole("tab",{name:tab,exact:true}).click();await page.waitForFunction(path=>Array.from(document.querySelectorAll('.panel.is-active .card-background img')).some(i=>i.src.includes(path)),selected.card_art_storage_path);}
-  await page.getByRole("tab",{name:"Nominate",exact:true}).click();await edit.click();await dialog.getByRole("radio").first().waitFor();await page.keyboard.press("Escape");await dialog.waitFor({state:"detached"});assert(await edit.evaluate(e=>e===document.activeElement));
+  await page.getByRole("tab",{name:"Nominate",exact:true}).click();await edit.click();await dialog.locator(".artwork-option").first().waitFor();await page.keyboard.press("Escape");await dialog.waitFor({state:"detached"});assert(await edit.evaluate(e=>e===document.activeElement));
   // UI loading, empty, retryable provider errors and failed-save feedback.
   let release;await page.route("**/v1/admin/artwork",async route=>{await new Promise(resolve=>{release=resolve;});await route.fulfill({json:{banners:[]}});});
-  await edit.click();await dialog.getByText("Loading banners…").waitFor();while(!release) await page.waitForTimeout(20);release();await dialog.getByText(/No suitable/).waitFor();assert(await dialog.getByRole("button",{name:"Save selection"}).isDisabled());await page.keyboard.press("Escape");
+  await edit.click();await dialog.getByText("Loading banners…").waitFor();while(!release) await page.waitForTimeout(20);release();await dialog.getByText(/No suitable/).waitFor();assert(await dialog.getByRole("button",{name:"Save"}).isDisabled());await page.keyboard.press("Escape");
   await page.unroute("**/v1/admin/artwork");await page.route("**/v1/admin/artwork",route=>route.fulfill({status:503,json:{message:"Mock artwork unavailable"}}));
   await edit.click();await dialog.getByText("Mock artwork unavailable").waitFor();assert(await dialog.getByRole("button",{name:"Retry"}).isVisible());await page.keyboard.press("Escape");await page.unroute("**/v1/admin/artwork");
   await page.route("**/v1/admin/artwork",route=>route.request().postDataJSON().action==="save"?route.fulfill({status:503,json:{message:"Mock save failed"}}):route.continue());
-  await edit.click();await dialog.getByRole("radio").last().check();await dialog.getByRole("button",{name:"Save selection"}).click();await dialog.getByText("Mock save failed").waitFor();assert(await dialog.getByRole("button",{name:"Save selection"}).isEnabled());await page.keyboard.press("Escape");
+  await edit.click();await dialog.locator(".artwork-option").last().click();await dialog.getByRole("button",{name:"Save"}).click();await dialog.getByText("Mock save failed").waitFor();assert(await dialog.getByRole("button",{name:"Save"}).isEnabled());await page.keyboard.press("Escape");
   await page.unroute("**/v1/admin/artwork");
   const nominationsBeforeSearch=(await env.DB.prepare("SELECT count(*) n FROM show_nominations").first()).n;
   await page.locator('#titleInput').fill('tt90000004');await page.getByRole('button',{name:'Search',exact:true}).click();
   await page.locator('#searchResults').getByRole('button',{name:'Edit artwork for Synthetic show'}).click();
-  await dialog.getByRole('radio').last().check();await dialog.getByRole('button',{name:'Save selection'}).click();await dialog.waitFor({state:'detached'});
+  await dialog.locator('.artwork-option').last().click();await dialog.getByRole('button',{name:'Save'}).click();await dialog.waitFor({state:'detached'});
   assert((await page.locator('#searchResults .card-background img').getAttribute('src')).startsWith('/artwork/card-art/fanart/'));
   assert.equal((await env.DB.prepare("SELECT count(*) n FROM show_nominations").first()).n,nominationsBeforeSearch,'Search-result save does not nominate');
   assert.deepEqual(errors,[]);
