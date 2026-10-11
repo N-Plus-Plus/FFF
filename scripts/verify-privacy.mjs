@@ -3,8 +3,9 @@ import { readFile, readdir } from "node:fs/promises";
 
 const frontend = ["index.html", "login.html", "login.js", "bootstrap.js", "api.js", "style.css", "app.js", "config.js", "store.js", "providers.js", "ranking.js", "wire-wednesday.png"];
 const vendor = ["lucide.min.js", "lucide-LICENSE.txt", "lexend-deca-LICENSE.txt", ...[400, 600, 700, 800].map((weight) => `lexend-deca-latin-${weight}.woff2`)];
-assert.deepEqual((await readdir("cloudflare/public")).sort(), [...frontend, "vendor"].sort(), "Only allowlisted assets may be packaged");
+assert.deepEqual((await readdir("cloudflare/public")).sort(), [...frontend, "vendor", "avatars"].sort(), "Only allowlisted assets may be packaged");
 assert.deepEqual((await readdir("cloudflare/public/vendor")).sort(), vendor.sort());
+assert.deepEqual((await readdir("cloudflare/public/avatars")).sort(), [1,2,3,4].map(n => `participant-${n}.png`));
 for (const path of [
   ...frontend.filter((name) => /\.(js|html|css)$/.test(name)),
   ...(await readdir("cloudflare/src")).map((name) => `cloudflare/src/${name}`),

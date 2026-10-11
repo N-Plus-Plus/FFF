@@ -6,7 +6,10 @@
 .login-panel [hidden] { display: none !important; }
 .remember-choice { display: flex; align-items: center; gap: 0.6rem; margin: 1.5rem 0; }
 .login-help { color: var(--text-secondary); font-size: 0.9rem; }
-.account-controls { position: relative; margin-left: auto; }
+.account-controls { position: absolute; top: 0; right: 0; width: 4rem; height: 4rem; }
+.icon-button.account-menu-trigger { position: absolute; top: 0; right: 0; width: 4rem; height: 4rem; padding: 0; overflow: hidden; }
+.account-menu-trigger img { width: 100%; height: 100%; object-fit: contain; }
+.account-menu-trigger [hidden], .account-menu-trigger:has(img:not([hidden])) svg { display: none; }
 .account-menu { position: absolute; inset: auto 0 auto auto; top: calc(100% + 0.5rem); margin: 0; padding: 0.5rem; border: var(--border-width) solid var(--border-primary); border-radius: var(--radius-container); background: var(--surface-raised); color: var(--text-primary); }
 .account-menu::backdrop { background: transparent; }
 .account-menu [hidden] { display: none; }
@@ -119,6 +122,9 @@ svg {
 }
 
 .app-header {
+  position: relative;
+  min-height: 4rem;
+  padding-right: 4.5rem;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -1169,3 +1175,7 @@ h2 {
   #panel-add .show-title, #panel-list .show-title, #panel-board .show-title { line-height: 1.1; }
   #panel-add .show-subtitle, #panel-list .show-subtitle, #panel-board .show-subtitle { line-height: 1; overflow-x: auto; scrollbar-width: none; }
 }
+
+/* Leave room for the text shadow inside ellipsis/scroll clipping boxes. */
+.result-card .show-title, .show-card .show-title, .leader-card .show-title,
+.result-card .show-subtitle, .show-card .show-subtitle, .leader-card .show-subtitle { padding-left: 0.4rem; }

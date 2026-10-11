@@ -1,3 +1,5 @@
+import { participantAvatars } from "../src/avatars.js";
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { fixture } from "./fixture.mjs";
 import { mappingSql } from "../scripts/prepare-google-mapping.mjs";
@@ -13,8 +15,8 @@ async function approve(identity, participantId, expectedName, extra = {}) {
 }
 try {
   assert.match(await (await request("/?u=obsolete&demo=1")).text(), /googleButton/);
-  for (const path of ["/app.js", "/bootstrap.js", "/vendor/lucide.min.js", "/artwork/posters/tt90000001.png", "/auth/session"]) assert.equal((await request(path)).status, 401, path);
-  for (const path of ["/missing", "/README.md", "/wrangler.jsonc", "/.env", "/cloudflare/private-any.json"]) assert.equal((await request(path)).status, 404, path);
+  for (const path of ["/avatar.png", "/app.js", "/bootstrap.js", "/vendor/lucide.min.js", "/artwork/posters/tt90000001.png", "/auth/session"]) assert.equal((await request(path)).status, 401, path);
+  for (const path of ["/avatars/participant-1.png", "/missing", "/README.md", "/wrangler.jsonc", "/.env", "/cloudflare/private-any.json"]) assert.equal((await request(path)).status, 404, path);
   assert.equal((await api("/v1/load", "", { token: "obsolete" })).status, 401);
   assert.equal((await api("/auth/challenge", "", {}, { Origin: "https://untrusted.example" })).status, 403);
   assert.equal((await api("/auth/google", "", { credential: "unbound", remember: true })).status, 401);
@@ -29,6 +31,17 @@ try {
   await assert.rejects(() => approve(a, "b", "Participant B"), /UNIQUE|constraint/i);
   await signIn(b); await approve(b, "b", "Participant B");
   const signedA = await signIn(a), signedB = await signIn(b);
+  participantAvatars.set("a", "participant-1.png");
+  participantAvatars.set("b", "participant-2.png");
+  for (const [cookie, filename] of [[signedA.cookie,"participant-1.png"],[signedB.cookie,"participant-2.png"]]) {
+    const avatar = await request("/avatar.png", {cookie});
+    assert.equal(avatar.status, 200);
+    assert.equal(avatar.headers.get("cache-control"), "private, no-store");
+    assert.deepEqual(Buffer.from(await avatar.arrayBuffer()), await readFile(`assets/avatars/${filename}`));
+    assert.equal(await (await request("/avatar.png", {cookie,method:"HEAD"})).text(), "");
+  }
+  participantAvatars.delete("a"); participantAvatars.delete("b");
+  assert.equal((await request("/avatar.png", {cookie:signedA.cookie})).status,404);
   assert.equal(signedA.response.status, 200);
   assert.match(signedA.response.headers.getSetCookie().find((s) => s.includes("session=")), /__Host-ww-session=.*HttpOnly; Secure; SameSite=Lax; Max-Age=2592000/);
   assert.equal((await (await request("/auth/session", { cookie: signedA.cookie })).json()).current_user.id, "a");

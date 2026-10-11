@@ -7,11 +7,18 @@ const root = new URL("../../", import.meta.url);
 const destination = new URL("../public/", import.meta.url);
 await mkdir(destination, { recursive: true });
 for (const entry of await readdir(destination, { withFileTypes: true })) {
-  if (entry.name === "vendor" && entry.isDirectory()) continue;
+  if (["vendor", "avatars"].includes(entry.name) && entry.isDirectory()) continue;
   if (!entry.isFile()) throw new Error("Unexpected directory in generated public assets; inspect it manually.");
   if (!publicFiles.includes(entry.name)) await unlink(new URL(entry.name, destination));
 }
 for (const name of publicFiles) await copyFile(new URL(name === "wire-wednesday.png" ? "assets/wire-wednesday.png" : name, root), new URL(name, destination));
+const avatarFiles = [1,2,3,4].map(n => `participant-${n}.png`);
+const avatars = new URL("avatars/", destination);
+await mkdir(avatars, { recursive: true });
+for (const entry of await readdir(avatars, { withFileTypes: true })) {
+  if (!entry.isFile() || !avatarFiles.includes(entry.name)) throw new Error("Unexpected avatar asset.");
+}
+for (const name of avatarFiles) await copyFile(new URL(`assets/avatars/${name}`, root), new URL(name, avatars));
 const vendorFiles = {
   "lucide.min.js": "node_modules/lucide/dist/umd/lucide.min.js",
   "lucide-LICENSE.txt": "node_modules/lucide/LICENSE",
@@ -25,4 +32,4 @@ for (const entry of await readdir(vendor, { withFileTypes: true })) {
   if (!Object.hasOwn(vendorFiles, entry.name)) await unlink(new URL(entry.name, vendor));
 }
 for (const [name, source] of Object.entries(vendorFiles)) await copyFile(new URL(source, root), new URL(name, vendor));
-console.log(`Prepared ${publicFiles.length + Object.keys(vendorFiles).length} allowlisted local assets in ${fileURLToPath(destination)}`);
+console.log(`Prepared ${publicFiles.length + avatarFiles.length + Object.keys(vendorFiles).length} allowlisted local assets in ${fileURLToPath(destination)}`);

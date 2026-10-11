@@ -77,9 +77,10 @@ try {
   if (await page.locator("#rankChoices").getByText("Synthetic show", { exact: true }).count()) {
     await page.locator("#rankChoices").getByText("Synthetic show", { exact: true }).click();
   }
+  const rankingSaved = page.waitForResponse(r => r.url().endsWith("/v1/ranking") && r.ok());
   await page.getByRole("button", { name: "Confirm placement" }).click();
   await page.getByRole("tab", { name: "List", exact: true }).click();
-  await page.waitForFunction(() => document.querySelector("#sequenceStatus").textContent.toLowerCase().includes("saved"));
+  await rankingSaved;
   assert(await page.locator("#rankedList").getByText("Synthetic show", { exact: true }).isVisible());
   const storage = await context.storageState();
   await context.close();

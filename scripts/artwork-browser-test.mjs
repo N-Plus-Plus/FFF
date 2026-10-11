@@ -28,6 +28,7 @@ try {
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     assert.equal(url.origin, origin, 'No external provider access');
+    if (url.pathname === '/avatar.png') return route.fulfill({contentType:'image/svg+xml', body:'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="32" fill="orange"/></svg>'});
     if (url.pathname.startsWith('/banner-')) return route.fulfill({contentType:'image/svg+xml', body:'<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="185"><rect width="1000" height="185" fill="#a6bdcf"/><circle cx="950" cy="92" r="50" fill="#f90"/></svg>'});
     if (url.pathname === '/auth/session') return route.fulfill({json:{current_user:{id:'test', is_admin:admin}}});
     if (!url.pathname.startsWith('/v1/')) return route.continue();
@@ -55,9 +56,15 @@ try {
   assert.equal(await page.locator('#userBadge').count(),0);
   assert.equal(await page.getByRole('button',{name:'Sign out',exact:true}).isVisible(),false);
   const accountTrigger=page.locator('#accountMenuButton');
+  await page.waitForFunction(()=>document.querySelector('#accountAvatar').naturalWidth>0);
+  assert.deepEqual(await accountTrigger.evaluate(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height,top:getComputedStyle(e).top,right:getComputedStyle(e).right})),{width:64,height:64,top:'0px',right:'0px'});
+  assert.equal(await accountTrigger.locator('svg:visible').count(),0);
+  assert.equal(await page.locator('#sequenceStatus, #retrySaveButton').count(),0);
+  assert.equal(await page.getByText('Active shows',{exact:true}).count(),0);
+  assert.equal(await page.getByText('Your ranked list',{exact:true}).count(),0);
   await accountTrigger.focus(); await page.keyboard.press('Enter');
   await page.getByRole('button',{name:'Sign out',exact:true}).waitFor();
-  assert.equal(await accountTrigger.getAttribute('aria-expanded'),'true');
+  await page.waitForFunction(()=>document.querySelector('#accountMenuButton').getAttribute('aria-expanded')==='true');
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('button',{name:'Sign out',exact:true}).isVisible(),false);
   await accountTrigger.click(); await page.locator('h1').click();
@@ -65,10 +72,13 @@ try {
 
   for (const width of [320,390,768,1440]) {
     await page.setViewportSize({width,height:900});
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    assert.deepEqual(await accountTrigger.evaluate(e=>[e.getBoundingClientRect().width,e.getBoundingClientRect().height]),[64,64]);
     for (const tab of ['Nominate','Rank','List','Watch']) {
       await page.getByRole('tab',{name:tab === 'Rank' ? /^Rank/ : tab,exact:tab !== 'Rank'}).click();
       await page.waitForTimeout(80);
       const panel = page.locator('.panel.is-active');
+      assert(await panel.locator('.show-title, .show-subtitle').evaluateAll(nodes=>nodes.every(e=>parseFloat(getComputedStyle(e).paddingLeft)>=6)));
       assert.equal(await panel.locator('.page-artwork-credit:visible').count(),1);
       assert.equal(await panel.locator('.card-art-credit').count(),0);
       const metrics = await panel.locator('article').evaluateAll(cards => cards.map(card => {
@@ -163,13 +173,13 @@ try {
   fanart=true; empty=false;
   await page.reload(); await page.getByRole('tab',{name:'List',exact:true}).click();
   await page.locator('#rankedList article').first().getByRole('button',{name:'Move down'}).click();
-  await page.waitForFunction(()=>document.querySelector('#sequenceStatus').textContent==='Saved');
+  await page.waitForResponse(r=>r.url().endsWith('/v1/board') && r.request().method()==='POST');
   assert.deepEqual(rankedIds,['b','a']);
   await page.locator('#rankedList article').last().getByRole('button',{name:'Move up'}).click();
-  await page.waitForFunction(()=>document.querySelector('#sequenceStatus').textContent==='Saved');
+  await page.waitForResponse(r=>r.url().endsWith('/v1/board') && r.request().method()==='POST');
   assert.deepEqual(rankedIds,['a','b']);
   await page.locator('#rankedList article').last().getByRole('button',{name:'Remove from ranking'}).click();
-  await page.waitForFunction(()=>document.querySelector('#sequenceStatus').textContent==='Saved');
+  await page.waitForResponse(r=>r.url().endsWith('/v1/board') && r.request().method()==='POST');
   assert.deepEqual(rankedIds,['a']);
   admin=false;
   for (const width of [320,390,768,1440]) {

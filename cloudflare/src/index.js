@@ -1,3 +1,4 @@
+import { participantAvatars } from "./avatars.js";
 import { preferBanner, bannerOptions, saveBanner, bannerPreview } from "./fanart.js";
 import { authenticate, authRoute, appOrigin, sameOrigin, localDemo } from "./google-auth.js";
 import { ACTIVE_SHOW_SQL } from "./show-visibility.js";
@@ -76,6 +77,12 @@ async function handleRequest(request, env, verifyGoogle) {
     return json(result);
   }
   if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Not found." }, 404);
+  if (path === "/avatar.png") {
+    const user = await authenticate(request, env);
+    const filename = participantAvatars.get(user.id);
+    if (!filename || !env.ASSETS) return json({ message: "Not found." }, 404);
+    return env.ASSETS.fetch(new Request(new URL(`/avatars/${filename}`, url), { method: request.method }));
+  }
   if (path.startsWith("/artwork/")) {
     await authenticate(request, env);
     const response = (path.startsWith("/artwork/fanart/") || path.startsWith("/artwork/card-art/fanart/")) ? await bannerPreview(url, env) : await artwork(url, env, {});

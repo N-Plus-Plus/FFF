@@ -28,8 +28,6 @@ const dom = {
   rankChoices: document.querySelector("#rankChoices"),
   placementMode: document.querySelector("#placementMode"),
   rankedList: document.querySelector("#rankedList"),
-  sequenceStatus: document.querySelector("#sequenceStatus"),
-  retrySaveButton: document.querySelector("#retrySaveButton"),
   boardStatus: document.querySelector("#boardStatus"),
   leaderboardList: document.querySelector("#leaderboardList"),
   loadingOverlay: document.querySelector("#loadingOverlay"),
@@ -119,6 +117,11 @@ async function init() {
 }
 
 function bindEvents() {
+  const avatar = document.querySelector("#accountAvatar");
+  const showAvatar = () => { avatar.hidden = false; const icon = dom.accountMenuButton.querySelector("svg, i"); if (icon) icon.hidden = true; };
+  avatar.addEventListener("load", showAvatar);
+  avatar.addEventListener("error", () => { avatar.hidden = true; const icon = dom.accountMenuButton.querySelector("svg, i"); if (icon) icon.hidden = false; });
+  if (avatar.complete && avatar.naturalWidth) showAvatar();
   dom.accountMenu.addEventListener("toggle", (event) => {
     dom.accountMenuButton.setAttribute("aria-expanded", String(event.newState === "open"));
   });
@@ -145,7 +148,6 @@ function bindEvents() {
     clearSearch();
   });
 
-  dom.retrySaveButton?.addEventListener("click", () => flushSaveQueue());
   dom.openOrderButton.addEventListener("click", () => setActiveTab("rank"));
   dom.dismissReminderButton.addEventListener("click", () => {
     appState.unrankedReminderDismissed = true;
@@ -477,7 +479,6 @@ function renderSearchResults() {
 function renderCatalogue() {
   const cards = [];
   if (appState.shows.length) {
-    cards.push(sectionLabel("Active shows"));
     appState.shows.forEach((show) => cards.push(catalogueCard(show)));
   }
   dom.catalogueList.replaceChildren(...(cards.length ? cards : [htmlToElement(emptyState("No active nominated shows yet."))]));
@@ -621,7 +622,6 @@ function renderShowActions(container, show, options = {}) {
 }
 
 function renderList() {
-  renderSaveStatus();
   const rankedChildren = appState.ranked.map((show, index) => rankedCard(show, index));
   const shouldShowRankedPlaceholder = appState.draggingShowId && appState.dragRankedInsertIndex !== null;
   if (shouldShowRankedPlaceholder) {
@@ -1224,7 +1224,6 @@ async function flushSaveQueue() {
   appState.inFlightVersion = version;
   appState.saveQueued = false;
   appState.saveStatus = "saving";
-  renderSaveStatus();
 
   try {
     const result = await dataStore.replaceRanking(appState.demoParticipant, sequence);
@@ -1240,8 +1239,7 @@ async function flushSaveQueue() {
   } catch (error) {
     if (appState.saveVersion === version) {
       appState.saveStatus = "failed";
-      showToast(error.message, "error");
-      renderSaveStatus();
+      showToast(`${error.message} Your latest ranking change is unsaved; make another ranking change to retry.`, "error");
     }
   } finally {
     appState.inFlightVersion = 0;
@@ -1249,20 +1247,6 @@ async function flushSaveQueue() {
       flushSaveQueue();
     }
   }
-}
-
-function renderSaveStatus() {
-  if (!dom.sequenceStatus || !dom.retrySaveButton) {
-    return;
-  }
-  const labels = {
-    idle: "No changes",
-    saving: "Saving",
-    saved: "Saved",
-    failed: "Save failed"
-  };
-  dom.sequenceStatus.textContent = labels[appState.saveStatus] || "No changes";
-  dom.retrySaveButton.hidden = appState.saveStatus !== "failed";
 }
 
 async function refreshBoard(reason) {
