@@ -57,7 +57,7 @@ try {
   assert.equal(await page.getByRole('button',{name:'Sign out',exact:true}).isVisible(),false);
   const accountTrigger=page.locator('#accountMenuButton');
   await page.waitForFunction(()=>document.querySelector('#accountAvatar').naturalWidth>0);
-  assert.deepEqual(await accountTrigger.evaluate(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height,top:getComputedStyle(e).top,right:getComputedStyle(e).right})),{width:64,height:64,top:'0px',right:'0px'});
+  assert.deepEqual(await accountTrigger.evaluate(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height,top:getComputedStyle(e).top,right:getComputedStyle(e).right})),{width:96,height:96,top:'0px',right:'0px'});
   assert.equal(await accountTrigger.locator('svg:visible').count(),0);
   assert.equal(await page.locator('#sequenceStatus, #retrySaveButton').count(),0);
   assert.equal(await page.getByText('Active shows',{exact:true}).count(),0);
@@ -73,7 +73,7 @@ try {
   for (const width of [320,390,768,1440]) {
     await page.setViewportSize({width,height:900});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-    assert.deepEqual(await accountTrigger.evaluate(e=>[e.getBoundingClientRect().width,e.getBoundingClientRect().height]),[64,64]);
+    assert.deepEqual(await accountTrigger.evaluate(e=>[e.getBoundingClientRect().width,e.getBoundingClientRect().height]),[96,96]);
     for (const tab of ['Nominate','Rank','List','Watch']) {
       await page.getByRole('tab',{name:tab === 'Rank' ? /^Rank/ : tab,exact:tab !== 'Rank'}).click();
       await page.waitForTimeout(80);

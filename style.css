@@ -6,11 +6,11 @@
 .login-panel [hidden] { display: none !important; }
 .remember-choice { display: flex; align-items: center; gap: 0.6rem; margin: 1.5rem 0; }
 .login-help { color: var(--text-secondary); font-size: 0.9rem; }
-.account-controls { position: absolute; top: 0; right: 0; width: 4rem; height: 4rem; }
-.icon-button.account-menu-trigger { position: absolute; top: 0; right: 0; width: 4rem; height: 4rem; padding: 0; overflow: hidden; }
+.account-controls { position: absolute; top: 0; right: 0; width: 6rem; height: 6rem; }
+.icon-button.account-menu-trigger { position: absolute; top: 0; right: 0; width: 6rem; height: 6rem; padding: 0; overflow: hidden; background: transparent; box-shadow: none; }
 .account-menu-trigger img { width: 100%; height: 100%; object-fit: contain; }
 .account-menu-trigger [hidden], .account-menu-trigger:has(img:not([hidden])) svg { display: none; }
-.account-menu { position: absolute; inset: auto 0 auto auto; top: calc(100% + 0.5rem); margin: 0; padding: 0.5rem; border: var(--border-width) solid var(--border-primary); border-radius: var(--radius-container); background: var(--surface-raised); color: var(--text-primary); }
+.account-menu { position: fixed; inset: 6rem 0 auto auto; margin: 0; padding: 0.5rem; border: var(--border-width) solid var(--border-primary); border-radius: var(--radius-container); background: var(--surface-raised); color: var(--text-primary); }
 .account-menu::backdrop { background: transparent; }
 .account-menu [hidden] { display: none; }
 .google-button { width: 100%; min-height: 44px; display: flex; justify-content: center; overflow: visible; color-scheme: light; }
@@ -123,8 +123,8 @@ svg {
 
 .app-header {
   position: relative;
-  min-height: 4rem;
-  padding-right: 4.5rem;
+  min-height: 6rem;
+  padding-right: 6.5rem;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
