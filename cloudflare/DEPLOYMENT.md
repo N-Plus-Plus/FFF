@@ -2,6 +2,10 @@
 
 ## Live production state — 11 October 2026
 
+Typography/header/copy refinement is live from commit `af60450`, deployed using `npx.cmd wrangler deploy --keep-vars` as version `71885f5e-64ab-416c-8ad7-98f0b7579926`. H1 is 1.6rem; header minimum height is 4rem; panel paragraphs use `max-width: calc(100vw - 8rem)`. Tab/field labels use weight 500, and buttons/show titles use 600. The existing pinned font package now supplies local weight 500 through the explicit asset and Worker allowlists; no dependency changed. List instructions read "Order your ranked list with the arrows, or tap and drag." and Watch reads "As voted by you; the watch order!". `git diff --check`, asset preparation and four-width `node scripts/artwork-browser-test.mjs` passed; full suite and live authenticated visual checks were not run for this presentation-only change. AGENTS.md was updated. Deployment preserved existing resources/configuration/secrets; no production data operations occurred.
+
+### Historical menu/scrollbar/card-border spacing tweaks
+
 Menu/scrollbar/card-border spacing tweaks are live from commit `fc9126f`, deployed using `npx.cmd wrangler deploy --keep-vars` as version `b683b889-4ac8-48f7-bb10-bab470baf9c0`. Sign out appears as a stacked popover with no visible bounding frame at `inset: 7.5rem 1rem auto auto`. Scrollbars use native thin sizing and an 8px WebKit fallback (approximately half conventional desktop width; actual native dimensions vary by browser/OS). Catalogue cards draw a 1px inset border; artwork credits use `margin: 1rem 0 0 0`. Only CSS application assets changed. `git diff --check`, asset preparation and `node scripts/artwork-browser-test.mjs` at 320/390/768/1440px passed; the full suite and live authenticated visual acceptance were not run for this CSS-only pass. Production resources, secrets/configuration and data were preserved; no data operations, sign-ins, emails or manual Cron executions occurred. AGENTS.md and README were updated.
 
 ### Historical avatar sizing/menu-position adjustment
