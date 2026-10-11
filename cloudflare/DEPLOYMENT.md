@@ -2,6 +2,12 @@
 
 ## Live production state — 11 October 2026
 
+Legacy GitHub Pages now publishes `main:/docs` only. Redirect code is in `docs/index.html`, `docs/redirect.css` and `docs/redirect.js`; canonical `assets/redirect/img.png` is copied into `docs/assets/redirect/img.png`. Release `dbdfced` installed the isolated redirect and `201855f` updated the user-supplied illustration. The latest Pages build succeeded. The image is centered in a square of `min(80vw,80vh)` with contain fitting; navigation replaces the legacy URL two seconds after image load/paint, always going to the canonical root and discarding legacy query/hash values. A clickable image and no-script refresh provide fallback navigation; no-referrer prevents old query leakage. Cloudflare packaging excludes this site and redirect image.
+
+User-authorized avatar edits were committed separately as `05f9df1` and deployed to existing Cloudflare `fff-api` using `npx.cmd wrangler deploy --keep-vars`, version `941d9caf-e4dd-4c00-9761-8c911163d062`. Only the four avatar images changed in the application asset deployment; no app entry-point, backend/configuration/data changes occurred. Local `node .wrangler/redirect-check.mjs` verified three viewport layouts, two-second timing, discarded query values and no-referrer using a mocked destination; syntax and diff checks passed. Full application suite was not rerun for static image/isolated-page changes. The user retains manual visual acceptance. No production data operations, sign-ins, emails, migrations or manual Cron occurred. AGENTS.md and README now document redirect ownership.
+
+### Historical final label/card presentation tweaks
+
 Final label/card presentation tweaks are live from commit `d236425`, deployed with `npx.cmd wrangler deploy --keep-vars` as version `f8bdddab-520a-48e1-9ee5-60c88cdd061c`. Introductory labels read "IMDb URL or show name.", "Choose a show, then scroll to rank." and "Order your ranked list.". Nominate introductory typography matches other tabs; card actions have the matching 0.9rem additional right inset. Watch successful update timestamps are removed; refresh failures remain visible. Gradient stops are black opacity 0.8 at 0%, 0.6 at 40%, and zero at 60%. All show cards are borderless (including placement/drag strokes); shared `--border-width` is 1px. Other card proportions, wheel behaviour, persistence and authentication are preserved.
 
 `node --check app.js`, `git diff --check`, asset preparation, Chromium/Firefox four-width `node scripts/artwork-browser-test.mjs`, deployment dry-run and privacy checks passed. Full suite was not repeated for this presentation-only change. Before/after management and anonymous live HTTPS checks verified preserved resources/settings/secrets/Cron, exact bundle/public assets and protected routes. Evidence is under ignored `.wrangler/preflight/final-ui-release/`. No production data writes, sign-ins, migrations, emails or manual Cron occurred. AGENTS.md/README were updated; authenticated visual acceptance remains manual.
@@ -289,14 +295,14 @@ Restore access only by deploying the reviewed Google-only application/config/ass
 
 ## Retired Supabase boundary
 
-Supabase repository configuration, migrations, functions, schedules and transfer tools are removed. Do not contact or delete the hosted project as part of app maintenance. Cloudflare migrations are the sole schema authority; filenames and inert compatibility fields remain unchanged. Private recovery exports remain ignored and preserved. GitHub Pages retirement requires separate approval.
+Supabase repository configuration, migrations, functions, schedules and transfer tools are removed. Do not contact or delete the hosted project as part of app maintenance. Cloudflare migrations are the sole schema authority; filenames and inert compatibility fields remain unchanged. Private recovery exports remain ignored and preserved. GitHub Pages now publishes only the isolated `main:/docs` redirect site, authorized in the legacy redirect pass.
 
 ## Executed cutover stages — do not replay
 
 1. **Stage 1:** verified resource identities; deployed universal closed-access maintenance; froze D1/R2 writes; retained original Worker settings/source/recovery bookmark; independently validated complete D1 and all 48 R2 objects. Use the preserved originals for comparison, never overwrite them with new exports.
 2. **Stage 2:** verified off-device copies; passed the exact-release local checks and secret-aware dry-run; applied only migrations 0004–0006 sequentially; independently verified four reviewed preapprovals without claimed subjects; prepared two-setting secrets file and post-migration recovery export. No final app/domain was deployed in this stage.
 3. **Final deployment:** under explicit approval, accepted manual inspection gates, reconfirmed maintenance/resources/private settings/release hashes, deployed the exact final Worker/assets/settings with the command above and attached the canonical domain. Verified DNS/TLS, access controls, headers, all protected D1 data, every R2 object and active Cron registration. No production scheduled event or participant nomination/ranking mutation was invoked.
-4. **Manual follow-up:** each participant completes real Google sign-in and session/data checks; observe the next Cron execution privately; retire GitHub Pages under the relevant operational approval. Hosted Supabase remains untouched and outside this runbook.
+4. **Manual follow-up:** each participant completes real Google sign-in and session/data checks; observe the next Cron execution privately; keep GitHub Pages limited to the isolated redirect site. Hosted Supabase remains untouched and outside this runbook.
 
 ## Failure/rollback policy
 
