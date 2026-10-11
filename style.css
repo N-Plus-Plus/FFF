@@ -1211,7 +1211,8 @@ h2 {
   --text-inset: 0rem;
   --number-shift: calc((var(--number-column) + var(--card-gap) + var(--text-inset) + 0.4rem - 2.1rem - var(--card-inset)) / 2);
 }
-#panel-list .show-card { --text-inset: 0.5rem; }
+#panel-list .show-card, #panel-board .leader-card { --text-inset: 0.5rem; }
+#panel-board .leader-card .show-meta { padding-left: 0.5rem; }
 #panel-list .rank-number, #panel-board .leader-position { transform: translateX(var(--number-shift)); }
 #panel-list .rank-controls { margin-right: var(--number-shift); }
 @media (max-width: 600px) {
