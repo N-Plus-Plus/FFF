@@ -2,6 +2,10 @@
 
 ## Live production state — 11 October 2026
 
+Menu/scrollbar/card-border spacing tweaks are live from commit `fc9126f`, deployed using `npx.cmd wrangler deploy --keep-vars` as version `b683b889-4ac8-48f7-bb10-bab470baf9c0`. Sign out appears as a stacked popover with no visible bounding frame at `inset: 7.5rem 1rem auto auto`. Scrollbars use native thin sizing and an 8px WebKit fallback (approximately half conventional desktop width; actual native dimensions vary by browser/OS). Catalogue cards draw a 1px inset border; artwork credits use `margin: 1rem 0 0 0`. Only CSS application assets changed. `git diff --check`, asset preparation and `node scripts/artwork-browser-test.mjs` at 320/390/768/1440px passed; the full suite and live authenticated visual acceptance were not run for this CSS-only pass. Production resources, secrets/configuration and data were preserved; no data operations, sign-ins, emails or manual Cron executions occurred. AGENTS.md and README were updated.
+
+### Historical avatar sizing/menu-position adjustment
+
 Avatar sizing/menu-position adjustment is live from commit `c7bf097`, deployed with `npx.cmd wrangler deploy --keep-vars` as version `5b8b0105-d63e-4815-b4c6-5888da6e57de`. The avatar trigger is now 6rem square at unchanged top/right zero, with a transparent background and no button shadow. Header space reserves the larger avatar. Sign out uses a fixed popover at top 6rem/right zero, avoiding document-scroll positioning. Only index/CSS application assets changed; backend/resources/configuration and production data were preserved. No tests, dry-run or live acceptance checks were run for this expedited release, as explicitly requested; existing browser assertions were updated to the new size. AGENTS.md and README were updated.
 
 ### Historical account-avatar and text-spacing refinement
