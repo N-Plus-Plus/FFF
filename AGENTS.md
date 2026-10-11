@@ -37,7 +37,7 @@ The project is an established static web app with live Cloudflare Worker hosting
 | Package manager | npm, for development-only tooling |
 | Persistence or database | Cloudflare D1 (`fff`, Oceania) is the production store through Worker `fff-api`. Opt-in localStorage demo with `?demo=1` |
 | External services | Cloudflare Workers, D1, R2, and Cron Trigger; TVmaze primary television metadata, fanart.tv preferred banners |
-| Deployment target | Live existing Cloudflare `fff-api` at `https://wirewednesday.nissen.nexus`; workers.dev/previews disabled. GitHub Pages retirement is pending |
+| Deployment target | Live existing Cloudflare `fff-api` at `https://wirewednesday.nissen.nexus`; workers.dev/previews disabled. GitHub Pages serves only the isolated `docs/` redirect site |
 | Source-control policy | Git worktree on `main` with `origin` at `https://github.com/N-Plus-Plus/FFF.git`; preserve unrelated user changes and do not push, commit, or rewrite history unless explicitly requested |
 | Test framework | Node assertion contracts and disposable Cloudflare D1/R2 fixtures; Playwright authentication, artwork, hosting and placement checks |
 | Build, run, and verification commands | See project commands |
@@ -83,6 +83,7 @@ Maintain this section as the project develops. It should help a future agent fin
 | Shared utilities | Small ES modules in `store.js`, `providers.js`, and `ranking.js` |
 | Tests | Contract/demo checks in `scripts/verify-contracts.mjs`; disposable signed-Google/D1/R2 tests in `cloudflare/tests/`; actual Wrangler/placement checks in `scripts/`; anonymous official-button review in `scripts/review-google-button.mjs` |
 | Build and deployment | `cloudflare/scripts/prepare-assets.mjs` copies an explicit public-file allowlist; Wrangler serves it through existing `fff-api` |
+| Legacy GitHub Pages redirect | `docs/index.html`, `docs/redirect.css`, `docs/redirect.js`; canonical image `assets/redirect/img.png` copied to `docs/assets/redirect/img.png`. Pages source is `main:/docs`, isolated from Cloudflare asset packaging |
 | Further documentation | `README.md`; `cloudflare/DEPLOYMENT.md` for delivery, privacy, cutover and rollback |
 
 Update this map when files gain clear ownership, move, or are retired. Prefer direct ownership guidance over a long inventory of every file.
@@ -345,7 +346,7 @@ Do not leave obsolete commands in this table after scripts are renamed or retire
 
 Current decisions:
 
-- Canonical production hosting is existing `fff-api` with Static Assets at `https://wirewednesday.nissen.nexus`. Production disables workers.dev, version preview URLs and cross-origin API use; GitHub Pages retirement is a pending operational follow-up. Package only allowlisted frontend files.
+- Canonical production hosting is existing `fff-api` with Static Assets at `https://wirewednesday.nissen.nexus`. Production disables workers.dev, version preview URLs and cross-origin API use; GitHub Pages serves only the isolated `docs/` redirect site. Package only allowlisted frontend files.
 - `bootstrap.js` appends per-page-load cache-busting queries to CSS and app modules. No inline scripts or document.write; production app CSP allows only local scripts.
 - The frontend uses same-origin session-authenticated Worker endpoints and receives no direct D1 access. Cloudflare is the sole application authority; retired hosted infrastructure must not be accessed without a separate explicit task.
 - Production resources remain Worker `fff-api`, D1 `fff` in Oceania and R2 `fff-artwork`. The authorised final cutover completed on 11 October 2026; version and acceptance evidence live in `cloudflare/DEPLOYMENT.md` and ignored `.wrangler/preflight/final/`. Migrations 0004–0006 and four reviewed Google preapprovals are installed. No subjects were fabricated; real first sign-in/session acceptance remains manual. Participant/admin/show/nomination/ranking data and all 48 original R2 objects were verified unchanged. Original D1/R2 recovery artifacts have checksum-matching, provider-confirmed in-sync copies in approved OneDrive storage. Preserve original exports/bookmarks and private approval mappings. Use explicit UTF-8 for evidence/SQL reads and writes; Windows CP1252 decoding previously caused six false metadata mismatches. On a failed production safety gate deploy the prepared Google-safe post-domain maintenance configuration, preserving the domain, disabling alternate URLs and removing data/assets bindings; never revive bearer authentication or restore old data over newer writes. Supabase is retired and cannot be a runtime fallback.
