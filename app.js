@@ -1287,10 +1287,7 @@ async function refreshBoard(reason) {
 }
 
 function renderBoard() {
-  const updated = appState.board.updatedAt ? new Date(appState.board.updatedAt) : null;
-  dom.boardStatus.textContent = updated
-    ? `Updated ${updated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-    : "Not refreshed yet";
+  dom.boardStatus.textContent = "";
 
   if (!appState.board.entries.length) {
     dom.leaderboardList.innerHTML = emptyState("No ranked active shows yet.");

@@ -33,7 +33,7 @@
   --text-secondary: #c5ccd4;
   --text-muted: #a5adb8;
   --border-primary: #fff;
-  --border-width: 2px;
+  --border-width: 1px;
   --radius-container: 0.4rem;
   --radius-pill: 999px;
   --card-surface-rgb: 85 85 85;
@@ -464,7 +464,7 @@ h2 {
 
 .show-card, .result-card, .leader-card {
   border: 0;
-  box-shadow: inset 0 0 0 1px var(--border-primary);
+  box-shadow: none;
 }
 
 .result-card--catalogue {
@@ -566,7 +566,7 @@ h2 {
 .show-card.is-dragging {
   opacity: 0.65;
   border-color: var(--indigo);
-  box-shadow: inset 0 0 0 1px var(--indigo);
+  box-shadow: none;
 }
 
 .rank-drop-placeholder {
@@ -879,7 +879,7 @@ h2 {
   z-index: 2;
   margin: 0 14px;
   border-color: var(--mint);
-  box-shadow: inset 0 0 0 1px var(--mint), 0 12px 36px rgb(0 0 0 / 0.6);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.6);
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -1224,7 +1224,11 @@ h2 {
   z-index: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(to right, rgb(0 0 0 / 0.8) 0%, rgb(0 0 0 / 0.8) 40%, rgb(0 0 0 / 0) 60%, rgb(0 0 0 / 0) 100%);
+  background: linear-gradient(to right, rgb(0 0 0 / 0.8) 0%, rgb(0 0 0 / 0.6) 40%, rgb(0 0 0 / 0) 60%, rgb(0 0 0 / 0) 100%);
 }
 .result-card:has(.card-background) { position: relative; isolation: isolate; }
 .result-card:has(.card-background) .show-meta, .result-card:has(.card-background) .card-actions { position: relative; z-index: 1; }
+
+#panel-add .field__label { color: var(--text-secondary); font-size: 0.92rem; font-weight: 400; max-width: calc(100vw - 8rem); }
+#panel-add .result-card .card-actions { margin-right: 0.9rem; }
+#boardStatus:empty { display: none; }

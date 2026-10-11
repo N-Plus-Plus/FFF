@@ -87,7 +87,7 @@ try {
       }));
       for (const metric of metrics) {
         assert(Math.abs(metric.ratio-200/37)<0.02, `${width} ${tab}: ${JSON.stringify(metric)}`);
-        assert.equal(metric.fit,'contain'); assert.match(metric.gradient,/linear-gradient.*0\.8.*40%.*60%/); assert.equal(metric.layer,'0');
+        assert.equal(metric.fit,'contain'); assert.match(metric.gradient,/linear-gradient.*0\.8.*0\.6.*40%.*60%/); assert.equal(metric.layer,'0');
 
         assert(metric.controls.every(Boolean), `${width} ${tab} controls overflow: ${JSON.stringify(metric)}`);
       }
@@ -242,7 +242,7 @@ try {
     await page.getByRole('tab',{name:tab === 'Rank' ? /^Rank/ : tab,exact:tab !== 'Rank'}).click();
     const panel=page.locator('.panel.is-active');
     await panel.evaluate(panel=>{const card=panel.querySelector('article');const parent=card.parentElement;parent.append(...Array.from({length:30},()=>card.cloneNode(true)));});
-    assert(await panel.locator('article').evaluateAll(cards=>cards.every(e=>getComputedStyle(e).borderWidth==='0px' && getComputedStyle(e).boxShadow.includes('inset'))), JSON.stringify(await panel.locator('article').evaluateAll(cards=>cards.slice(0,3).map(e=>({classes:e.className,border:getComputedStyle(e).borderWidth,shadow:getComputedStyle(e).boxShadow})))));
+    assert(await panel.locator('article').evaluateAll(cards=>cards.every(e=>getComputedStyle(e).borderWidth==='0px' && getComputedStyle(e).boxShadow==='none')), JSON.stringify(await panel.locator('article').evaluateAll(cards=>cards.slice(0,3).map(e=>({classes:e.className,border:getComputedStyle(e).borderWidth,shadow:getComputedStyle(e).boxShadow})))));
     for(const selector of ['.show-title','.show-subtitle','.card-background','button:not(:disabled)']) {
       await page.evaluate(()=>scrollTo(0,0));
       const node=panel.locator(selector).first();
