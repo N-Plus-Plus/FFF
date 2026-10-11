@@ -66,7 +66,7 @@ try {
   }
   assert.equal((await context.request.get(origin + "/app.js")).status(), 401);
   await page.getByRole("button", { name: "Sign in with Google" }).click();
-  await page.waitForFunction(() => document.querySelector("#userBadge")?.textContent.startsWith("Participant A"));
+  await page.waitForFunction(() => document.querySelector("#accountMenuButton")?.dataset.participantName === "Participant A");
   const session = (await context.cookies()).find((c) => c.name === "ww-local-session");
   assert(session.httpOnly && session.expires > Date.now()/1000, "Remembered cookie persists");
   await page.locator("#titleInput").fill("tt90000001");
@@ -86,12 +86,13 @@ try {
   context = await browser.newContext({ storageState: storage, viewport: { width: 1280, height: 900 } });
   await configure(context); page = await context.newPage();
   await page.goto(origin);
-  await page.waitForFunction(() => document.querySelector("#userBadge")?.textContent.startsWith("Participant A"));
+  await page.waitForFunction(() => document.querySelector("#accountMenuButton")?.dataset.participantName === "Participant A");
   await page.getByRole("tab", { name: "List", exact: true }).click();
   assert(await page.locator("#rankedList").getByText("Synthetic show", { exact: true }).isVisible());
   const otherTab = await context.newPage();
   await otherTab.goto(origin);
-  await otherTab.waitForFunction(() => document.querySelector("#userBadge")?.textContent.startsWith("Participant A"));
+  await otherTab.waitForFunction(() => document.querySelector("#accountMenuButton")?.dataset.participantName === "Participant A");
+  await page.locator("#accountMenuButton").click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   assert.equal((await context.request.get(origin + "/auth/session")).status(), 401, "Logout must revoke the remembered session");
   await page.waitForFunction(() => Boolean(document.querySelector("#googleButton")));

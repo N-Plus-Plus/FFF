@@ -52,6 +52,17 @@ try {
   });
   await page.goto(origin);
   await page.locator('.artwork-edit').first().waitFor();
+  assert.equal(await page.locator('#userBadge').count(),0);
+  assert.equal(await page.getByRole('button',{name:'Sign out',exact:true}).isVisible(),false);
+  const accountTrigger=page.locator('#accountMenuButton');
+  await accountTrigger.focus(); await page.keyboard.press('Enter');
+  await page.getByRole('button',{name:'Sign out',exact:true}).waitFor();
+  assert.equal(await accountTrigger.getAttribute('aria-expanded'),'true');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('button',{name:'Sign out',exact:true}).isVisible(),false);
+  await accountTrigger.click(); await page.locator('h1').click();
+  assert.equal(await page.getByRole('button',{name:'Sign out',exact:true}).isVisible(),false);
+
   for (const width of [320,390,768,1440]) {
     await page.setViewportSize({width,height:900});
     for (const tab of ['Nominate','Rank','List','Watch']) {
@@ -66,10 +77,12 @@ try {
       }));
       for (const metric of metrics) {
         assert(Math.abs(metric.ratio-200/37)<0.02, `${width} ${tab}: ${JSON.stringify(metric)}`);
-        assert.equal(metric.fit,'contain'); assert.equal(metric.layer,'-1');
-        assert(metric.gradient.includes('0.7') && metric.gradient.includes('20%') && metric.gradient.includes('40%'));
+        assert.equal(metric.fit,'contain'); assert.equal(metric.gradient,'none');
+
         assert(metric.controls.every(Boolean), `${width} ${tab} controls overflow: ${JSON.stringify(metric)}`);
       }
+      assert(await panel.locator('.show-meta').evaluateAll(nodes=>nodes.every(node=>getComputedStyle(node).textShadow!=='none')));
+      if (tab==='Nominate' || tab==='List') assert(await panel.locator('.show-meta').evaluateAll(nodes=>nodes.every(node=>getComputedStyle(node).paddingLeft==='8px')));
       if (tab !== 'Rank') {
         const lines = await panel.locator('article').evaluateAll(cards => cards.map(card => {
           const nodes = [card.querySelector('.show-title'), ...card.querySelectorAll('.show-details .show-subtitle')];
@@ -79,12 +92,15 @@ try {
         for (const line of lines) {
           assert(line.every(part=>part.inside), `${width} ${tab} text clips: ${JSON.stringify(line)}`);
           assert(line[0].bottom<=line[1].top+1);
-          if (width<=600) assert(Math.abs(line[1].top-line[2].top)<1, 'Mobile year and episodes share a line');
-          else assert(line[1].bottom<=line[2].top+1, 'Desktop year and episodes stack');
+          assert(line[1].bottom<=line[2].top+1, 'Desktop year and episodes stack');
           assert(line[2].bottom<=line[3].top+1, 'Runtime is the last line');
         }
       }
       if (tab==='Nominate') {
+        await accountTrigger.click();
+        const menuBox=await page.locator('#accountMenu').boundingBox();
+        assert(menuBox.x>=0 && menuBox.x+menuBox.width<=width, 'Account menu fits viewport');
+        await page.keyboard.press('Escape');
         assert.equal(await panel.getByRole('button',{name:/^(Nominate|Withdraw)$/}).count(),0);
         const tools=await panel.locator('article').first().locator('.card-actions button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect(),c=getComputedStyle(b);return {width:r.width,height:r.height,top:r.top,background:c.backgroundColor,color:c.color,text:b.textContent.trim(),name:b.getAttribute('aria-label')};}));
         assert.equal(tools.length,2);
@@ -158,7 +174,7 @@ try {
   admin=false;
   for (const width of [320,390,768,1440]) {
     await page.setViewportSize({width,height:900}); await page.goto(origin);
-    await page.waitForFunction(()=>document.querySelector('#userBadge').textContent==='Fixture participant');
+    await page.waitForFunction(()=>document.querySelector('#accountMenuButton').dataset.participantName==='Fixture participant');
     assert.equal(await page.locator('#catalogueList button').count(),0, 'Ordinary users have no persistent card actions');
     await page.locator('#titleInput').fill('fictional');
     await page.getByRole('button',{name:'Search',exact:true}).click();
@@ -173,6 +189,6 @@ try {
   }
   assert(mutations.every(path=>path==='/v1/ranking'), 'No nominations or removals changed during layout checks');
   assert.deepEqual(errors,[]);
-  console.log('Artwork UI checks passed: 320/390/768/1440px, stacked text, admin/ordinary permissions, matching controls, retained ranking actions, exact ratios, gradient layers, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
+  console.log('Artwork UI checks passed: 320/390/768/1440px, stacked text, admin/ordinary permissions, matching controls, retained ranking actions, exact ratios, no artwork overlay, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 

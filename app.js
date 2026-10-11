@@ -10,7 +10,8 @@ const DRAG_CANCEL_MOVE_PX = 8;
 const REMINDER_DISMISSED_KEY = "fff.unrankedReminder.dismissed";
 
 const dom = {
-  userBadge: document.querySelector("#userBadge"),
+  accountMenuButton: document.querySelector("#accountMenuButton"),
+  accountMenu: document.querySelector("#accountMenu"),
   logoutForm: document.querySelector("#logoutForm"),
   appNotice: document.querySelector("#appNotice"),
   addForm: document.querySelector("#addForm"),
@@ -44,7 +45,7 @@ function updatePageArtworkCredit(panel) {
   if (!credit && displayed) {
     credit = document.createElement("p");
     credit.className = "page-artwork-credit";
-    credit.innerHTML = 'Banner artwork: <a href="https://fanart.tv/" target="_blank" rel="noopener noreferrer">fanart.tv</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>. Black gradient overlaid for readability.';
+    credit.innerHTML = 'Banner artwork: <a href="https://fanart.tv/" target="_blank" rel="noopener noreferrer">fanart.tv</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>.';
     panel.append(credit);
   }
   if (credit && credit.hidden === displayed) credit.hidden = !displayed;
@@ -118,6 +119,9 @@ async function init() {
 }
 
 function bindEvents() {
+  dom.accountMenu.addEventListener("toggle", (event) => {
+    dom.accountMenuButton.setAttribute("aria-expanded", String(event.newState === "open"));
+  });
   dom.logoutForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
@@ -208,9 +212,9 @@ async function loadApp() {
 }
 
 function render() {
-  dom.userBadge.textContent = appState.currentUser
-    ? `${appState.currentUser.displayName}${appState.currentUser.isAdmin ? " / admin" : ""}`
-    : "Unknown user";
+  dom.accountMenuButton.disabled = !appState.currentUser || appState.demoMode;
+  dom.accountMenuButton.dataset.participantName = appState.currentUser?.displayName || "";
+  dom.accountMenuButton.setAttribute("aria-label", appState.currentUser ? `Account menu for ${appState.currentUser.displayName}` : "Account menu");
   renderSearchResults();
   renderCatalogue();
   renderRank();
@@ -221,7 +225,7 @@ function render() {
 }
 
 function renderFatalError(message) {
-  dom.userBadge.textContent = "Unavailable";
+  dom.accountMenuButton.disabled = true;
   dom.appNotice.hidden = false;
   dom.appNotice.textContent = message;
   dom.searchResults.innerHTML = emptyState(message);
@@ -243,7 +247,8 @@ function renderNotice() {
 }
 
 function setLoading(message) {
-  dom.userBadge.textContent = "Loading";
+  dom.accountMenuButton.dataset.participantName = "";
+  dom.accountMenuButton.disabled = true;
   dom.searchResults.hidden = true;
   dom.searchResults.replaceChildren();
   dom.rankedList.innerHTML = emptyState(message);

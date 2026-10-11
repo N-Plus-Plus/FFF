@@ -21,7 +21,7 @@ try {
   assert.equal(response.status(), 200);
   assert.equal(response.headers()["referrer-policy"], "no-referrer");
   assert.equal(response.headers()["cache-control"], "private, no-store");
-  await page.waitForFunction(() => document.querySelector("#userBadge").textContent !== "Loading");
+  await page.waitForFunction(() => document.querySelector("#accountMenuButton").dataset.participantName);
   assert.equal(await page.title(), "Wire Wednesday");
   assert.equal(await page.locator("h1").textContent(), "Wire Wednesday");
   assert.equal(await page.evaluate(async () => (await import("/config.js")).APP_CONFIG.apiUrl), "/");

@@ -21,9 +21,11 @@
           <img class="site-logo" src="/wire-wednesday.png" width="40" height="40" alt="">
           <h1>Wire Wednesday</h1>
         </div>
-        <div class="user-controls">
-          <div id="userBadge" class="user-badge" aria-live="polite">Loading</div>
-          <form id="logoutForm" action="/auth/logout" method="post"><button class="button button--neutral button--compact" type="submit">Sign out</button></form>
+        <div class="account-controls">
+          <button id="accountMenuButton" class="icon-button account-menu-trigger" type="button" popovertarget="accountMenu" aria-label="Account menu" aria-controls="accountMenu" aria-expanded="false" disabled><i data-lucide="menu" aria-hidden="true"></i></button>
+          <div id="accountMenu" class="account-menu" popover>
+            <form id="logoutForm" action="/auth/logout" method="post"><button class="button button--neutral" type="submit" autofocus><i data-lucide="log-out" aria-hidden="true"></i><span>Sign out</span></button></form>
+          </div>
         </div>
       </header>
 
