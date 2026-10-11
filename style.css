@@ -506,7 +506,7 @@ h2 {
 .artwork-dialog .button[hidden] { display: none; }
 .artwork-dialog a { color: inherit; text-decoration: underline; }
 .artwork-credit { font-size: 0.8rem; }
-.page-artwork-credit { margin: 1rem 0 0 0; color: var(--text-muted); font-size: 0.8rem; }
+.page-artwork-credit { margin: 0.5rem 0 0 0; padding: 0; color: var(--text-muted); font-size: 4px; }
 .page-artwork-credit a { color: inherit; text-decoration: underline; }
 
 .show-card,
@@ -783,7 +783,7 @@ h2 {
   grid-template-columns: repeat(4, 1fr);
   gap: 0.35rem;
   padding: 0.55rem 0.7rem calc(0.55rem + var(--safe-bottom));
-  border-top: var(--border-width) solid var(--paper);
+  border-top: 1px solid var(--paper);
   background: rgb(34 34 34 / 0.96);
   backdrop-filter: blur(12px);
 }
@@ -923,8 +923,8 @@ h2 {
 }
 
 .bottom-tab.is-active {
-  background: var(--jeans);
-  color: #fff;
+  background: var(--lavender);
+  color: #000;
   box-shadow: none;
 }
 
@@ -1029,6 +1029,7 @@ h2 {
     transform: translateX(-50%);
     border: var(--border-width) solid var(--paper);
     border-bottom: 0;
+    border-top-width: 1px;
     border-radius: var(--radius-container) var(--radius-container) 0 0;
   }
 
@@ -1201,3 +1202,29 @@ h2 {
 
 :is(.show-card, .result-card, .leader-card) .show-details,
 :is(.show-card, .result-card, .leader-card) .show-subtitle { overflow: clip; }
+
+/* The number moves within its existing column; text columns stay in place. */
+#panel-list .show-card, #panel-board .leader-card {
+  --number-column: 2.2rem;
+  --card-inset: 0.35rem;
+  --card-gap: 0.4rem;
+  --text-inset: 0rem;
+  --number-shift: calc((var(--number-column) + var(--card-gap) + var(--text-inset) + 0.4rem - 2.1rem - var(--card-inset)) / 2);
+}
+#panel-list .show-card { --text-inset: 0.5rem; }
+#panel-list .rank-number, #panel-board .leader-position { transform: translateX(var(--number-shift)); }
+#panel-list .rank-controls { margin-right: var(--number-shift); }
+@media (max-width: 600px) {
+  #panel-list .show-card, #panel-board .leader-card { --number-column: 2.1rem; --card-inset: 2px; --card-gap: 0.25rem; }
+}
+:is(.show-card, .result-card, .leader-card):has(.card-background)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(to right, rgb(0 0 0 / 0.8) 0%, rgb(0 0 0 / 0.8) 40%, rgb(0 0 0 / 0) 60%, rgb(0 0 0 / 0) 100%);
+}
+.result-card:has(.card-background) { position: relative; isolation: isolate; }
+.result-card:has(.card-background) .show-meta, .result-card:has(.card-background) .card-actions { position: relative; z-index: 1; }

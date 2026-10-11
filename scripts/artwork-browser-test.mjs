@@ -87,9 +87,20 @@ try {
       }));
       for (const metric of metrics) {
         assert(Math.abs(metric.ratio-200/37)<0.02, `${width} ${tab}: ${JSON.stringify(metric)}`);
-        assert.equal(metric.fit,'contain'); assert.equal(metric.gradient,'none');
+        assert.equal(metric.fit,'contain'); assert.match(metric.gradient,/linear-gradient.*0\.8.*40%.*60%/); assert.equal(metric.layer,'0');
 
         assert(metric.controls.every(Boolean), `${width} ${tab} controls overflow: ${JSON.stringify(metric)}`);
+      }
+      if(tab==='List' || tab==='Watch') {
+        const spacing=await panel.locator('article').first().evaluate(card=>{
+          const c=card.getBoundingClientRect(), n=card.querySelector('.rank-number, .leader-position').getBoundingClientRect();
+          const title=card.querySelector('.show-title'), t=title.getBoundingClientRect();
+          const textLeft=t.left+parseFloat(getComputedStyle(title).paddingLeft);
+          const controls=card.querySelector('.rank-controls');
+          return {left:n.left-c.left,right:textLeft-n.right,controls:controls?c.right-controls.getBoundingClientRect().right:null};
+        });
+        assert(Math.abs(spacing.left-spacing.right)<0.6,JSON.stringify(spacing));
+        if(spacing.controls!==null)assert(Math.abs(spacing.left-spacing.controls)<0.6,JSON.stringify(spacing));
       }
       assert(await panel.locator('.show-meta').evaluateAll(nodes=>nodes.every(node=>getComputedStyle(node).textShadow!=='none')));
       if (tab==='Nominate' || tab==='List') assert(await panel.locator('.show-meta').evaluateAll(nodes=>nodes.every(node=>getComputedStyle(node).paddingLeft==='8px')));
@@ -246,6 +257,6 @@ try {
   }
   assert(mutations.every(path=>path==='/v1/ranking'), 'No nominations or removals changed during layout checks');
   assert.deepEqual(errors,[]);
-  console.log('Artwork UI checks passed: 320/390/768/1440px, stacked text, admin/ordinary permissions, matching controls, retained ranking/drag actions, exact ratios, wheel units and boundary passthrough, wheel over text/artwork/buttons, no artwork overlay, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
+  console.log('Artwork UI checks passed: 320/390/768/1440px, stacked text, admin/ordinary permissions, matching controls, retained ranking/drag actions, exact ratios, wheel units and boundary passthrough, wheel over text/artwork/buttons, horizontal artwork overlay, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 
