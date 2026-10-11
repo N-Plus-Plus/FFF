@@ -24,7 +24,7 @@ const vendorFiles = {
   "lucide-LICENSE.txt": "node_modules/lucide/LICENSE",
   "lexend-deca-LICENSE.txt": "node_modules/@fontsource/lexend-deca/LICENSE"
 };
-for (const weight of [400, 600, 700, 800]) vendorFiles[`lexend-deca-latin-${weight}.woff2`] = `node_modules/@fontsource/lexend-deca/files/lexend-deca-latin-${weight}-normal.woff2`;
+for (const weight of [400, 500, 600, 700, 800]) vendorFiles[`lexend-deca-latin-${weight}.woff2`] = `node_modules/@fontsource/lexend-deca/files/lexend-deca-latin-${weight}-normal.woff2`;
 const vendor = new URL("vendor/", destination);
 await mkdir(vendor, { recursive: true });
 for (const entry of await readdir(vendor, { withFileTypes: true })) {

@@ -7,7 +7,7 @@ import { sendRankingReminders } from "./ranking-reminders.js";
 const TVMAZE = "https://api.tvmaze.com";
 const json = (body, status = 200) => Response.json(body, { status });
 const now = () => new Date().toISOString();
-const PUBLIC_FILES = new Set(["/login.html", "/login.js", "/style.css", "/wire-wednesday.png", ...[400,600,700,800].map((n) => `/vendor/lexend-deca-latin-${n}.woff2`)]);
+const PUBLIC_FILES = new Set(["/login.html", "/login.js", "/style.css", "/wire-wednesday.png", ...[400,500,600,700,800].map((n) => `/vendor/lexend-deca-latin-${n}.woff2`)]);
 const PRIVATE_FILES = new Set(["/index.html", "/app.js", "/bootstrap.js", "/api.js", "/config.js", "/store.js", "/providers.js", "/ranking.js", "/vendor/lucide.min.js", "/vendor/lucide-LICENSE.txt", "/vendor/lexend-deca-LICENSE.txt"]);
 
 // Verifier injection is an in-process test seam, never an HTTP/env bypass.

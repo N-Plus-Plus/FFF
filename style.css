@@ -1,3 +1,4 @@
+@font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 500; font-display: swap; src: url("/vendor/lexend-deca-latin-500.woff2") format("woff2"); }
 @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 400; font-display: swap; src: url("/vendor/lexend-deca-latin-400.woff2") format("woff2"); }
 @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 600; font-display: swap; src: url("/vendor/lexend-deca-latin-600.woff2") format("woff2"); }
 @font-face { font-family: "Lexend Deca"; font-style: normal; font-weight: 700; font-display: swap; src: url("/vendor/lexend-deca-latin-700.woff2") format("woff2"); }
@@ -124,7 +125,7 @@ svg {
 
 .app-header {
   position: relative;
-  min-height: 6rem;
+  min-height: 4rem;
   padding-right: 6.5rem;
   display: flex;
   flex-wrap: wrap;
@@ -170,7 +171,7 @@ p {
 
 h1 {
   margin-block-end: 0;
-  font-size: clamp(1.7rem, 1.35rem + 1.1vw, 2.2rem);
+  font-size: 1.6rem;
   line-height: 1.08;
 }
 
@@ -218,6 +219,7 @@ h2 {
 }
 
 .panel-heading p {
+  max-width: calc(100vw - 8rem);
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.92rem;
@@ -243,7 +245,7 @@ h2 {
 .field__label {
   color: var(--text-primary);
   font-size: 0.88rem;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .field__input {
@@ -318,7 +320,7 @@ h2 {
   border-radius: var(--radius-container);
   background: var(--button-colour);
   color: #fff;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   user-select: none;
@@ -616,7 +618,7 @@ h2 {
 .show-title {
   margin: 0 0 0.2rem;
   overflow-wrap: anywhere;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -913,7 +915,7 @@ h2 {
   border-radius: var(--radius-container);
   background: var(--surface-base);
   color: var(--text-secondary);
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .bottom-tab.is-active {
