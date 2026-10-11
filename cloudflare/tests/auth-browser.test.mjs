@@ -75,7 +75,7 @@ try {
   await page.locator("#catalogueList").getByText("Synthetic show", { exact: true }).waitFor();
   await page.getByRole("tab", { name: /^Rank/ }).click();
   if (await page.locator("#rankChoices").getByText("Synthetic show", { exact: true }).count()) {
-    await page.locator("#rankChoices").getByText("Synthetic show", { exact: true }).click();
+    await page.locator("#rankChoices").getByRole("button", {name:"Rank Synthetic show",exact:true}).click();
   }
   const rankingSaved = page.waitForResponse(r => r.url().endsWith("/v1/ranking") && r.ok());
   await page.getByRole("button", { name: "Confirm placement" }).click();

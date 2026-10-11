@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { chromium } from '@playwright/test';
+import { chromium, firefox } from '@playwright/test';
 
 // Only generated public assets and fictional API responses are served locally.
 const server = createServer(async (req, res) => {
@@ -16,7 +16,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch();
+const browser = await (process.env.UI_BROWSER === "firefox" ? firefox : chromium).launch(process.env.UI_FIREFOX_PATH ? {executablePath:process.env.UI_FIREFOX_PATH} : {});
 try {
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', error => errors.push(error.message));
@@ -127,8 +127,29 @@ try {
   }
   await page.setViewportSize({width:390,height:900});
   await page.getByRole('tab',{name:/^Rank/}).click();
-  await page.locator('#rankChoices article').first().click();
+  await page.locator('#rankChoices article button').first().click();
   assert.equal(await page.locator('#panel-rank .page-artwork-credit:visible').count(),1);
+  const wheelChecks=await page.locator('.placement-stage').evaluate(stage=>{
+    const send=(deltaY,deltaMode,extra={})=>{
+      const event=new WheelEvent('wheel',{deltaY,deltaMode,bubbles:true,cancelable:true,...extra});
+      stage.dispatchEvent(event);
+      return {blocked:event.defaultPrevented,label:stage.querySelector('[data-placement-result]').textContent};
+    };
+    const bottom=send(1,1);
+    const line=send(-1,1);
+    const pageUp=send(-1,2);
+    const top=send(-100,0);
+    const pixels=send(2000,0);
+    const zoom=send(-1,1,{ctrlKey:true});
+    return {bottom,line,pageUp,top,pixels,zoom};
+  });
+  assert.equal(wheelChecks.bottom.blocked,false);
+  assert.equal(wheelChecks.line.blocked,true);
+  assert.equal(wheelChecks.line.label,'Place at #2');
+  assert.equal(wheelChecks.pageUp.label,'Place at #1');
+  assert.equal(wheelChecks.top.blocked,false);
+  assert.equal(wheelChecks.pixels.label,'Place at #3');
+  assert.equal(wheelChecks.zoom.blocked,false);
   const placement = await page.locator('.placement-card').boundingBox();
   assert(Math.abs(placement.width/placement.height-200/37)<0.02);
   await page.getByRole('button',{name:'Cancel placement'}).click();
@@ -172,6 +193,13 @@ try {
   }
   fanart=true; empty=false;
   await page.reload(); await page.getByRole('tab',{name:'List',exact:true}).click();
+  const dragCard=page.locator('#rankedList article').first();
+  const dragBox=await dragCard.locator('.show-title').boundingBox();
+  await page.mouse.move(dragBox.x+10,dragBox.y+dragBox.height/2);
+  await page.mouse.down();
+  await page.waitForFunction(()=>document.querySelector('#rankedList .is-dragging'));
+  await page.mouse.up();
+  await page.waitForFunction(()=>!document.querySelector('#rankedList .is-dragging'));
   await page.locator('#rankedList article').first().getByRole('button',{name:'Move down'}).click();
   await page.waitForResponse(r=>r.url().endsWith('/v1/board') && r.request().method()==='POST');
   assert.deepEqual(rankedIds,['b','a']);
@@ -197,8 +225,27 @@ try {
       return Math.abs(r.width/r.height-200/37)<0.02 && [...card.querySelectorAll('.show-title, .show-subtitle')].every(node=>{const n=node.getBoundingClientRect();return n.top>=r.top&&n.bottom<=r.bottom;});
     })), 'Search preserves nomination access and card layout');
   }
+  // Synthetic long pages verify wheel input over decorative card content.
+  await page.setViewportSize({width:390,height:650});
+  for (const tab of ['Nominate','Rank','List','Watch']) {
+    await page.getByRole('tab',{name:tab === 'Rank' ? /^Rank/ : tab,exact:tab !== 'Rank'}).click();
+    const panel=page.locator('.panel.is-active');
+    await panel.evaluate(panel=>{const card=panel.querySelector('article');const parent=card.parentElement;parent.append(...Array.from({length:30},()=>card.cloneNode(true)));});
+    assert(await panel.locator('article').evaluateAll(cards=>cards.every(e=>getComputedStyle(e).borderWidth==='0px' && getComputedStyle(e).boxShadow.includes('inset'))), JSON.stringify(await panel.locator('article').evaluateAll(cards=>cards.slice(0,3).map(e=>({classes:e.className,border:getComputedStyle(e).borderWidth,shadow:getComputedStyle(e).boxShadow})))));
+    for(const selector of ['.show-title','.show-subtitle','.card-background','button:not(:disabled)']) {
+      await page.evaluate(()=>scrollTo(0,0));
+      const node=panel.locator(selector).first();
+      if(!await node.count())continue;
+      const box=await node.boundingBox();
+      if(!box)continue;
+      await page.mouse.move(box.x+Math.min(20,box.width/2),box.y+box.height/2);
+      const before=await page.evaluate(()=>scrollY);
+      await page.mouse.wheel(0,180);
+      await page.waitForFunction(y=>scrollY>y,before);
+    }
+  }
   assert(mutations.every(path=>path==='/v1/ranking'), 'No nominations or removals changed during layout checks');
   assert.deepEqual(errors,[]);
-  console.log('Artwork UI checks passed: 320/390/768/1440px, stacked text, admin/ordinary permissions, matching controls, retained ranking actions, exact ratios, no artwork overlay, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
+  console.log('Artwork UI checks passed: 320/390/768/1440px, stacked text, admin/ordinary permissions, matching controls, retained ranking/drag actions, exact ratios, wheel units and boundary passthrough, wheel over text/artwork/buttons, no artwork overlay, keyboard picker, save/reopen, retry and empty Rank attribution (fictional API).');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
 

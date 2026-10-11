@@ -311,8 +311,8 @@ async function verifyDemoStore() {
 }
 
 function verifyTextContracts() {
-  assert.match(rootFiles.app, /rel="noopener noreferrer"/, "IMDb link uses noopener noreferrer");
-  assert.match(rootFiles.app, /referrerpolicy="no-referrer"/, "IMDb link avoids referrer leakage");
+  assert.doesNotMatch(rootFiles.app, /class="show-title__link"/, "Card titles are decorative text");
+
   assert.match(rootFiles.app, /closest\("button, a, input, select, textarea"\)/, "interactive controls do not start drag");
   assert.match(rootFiles.app, /DRAG_HOLD_DELAY_MS = 250/, "card drag waits for a 0.25s hold");
   assert.match(rootFiles.css, /touch-action: pan-y;/, "show cards allow normal vertical swipe scrolling before drag starts");

@@ -663,8 +663,8 @@ function renderRank() {
 function rankChoiceCard(show) {
   const card = document.createElement("article");
   card.className = "show-card rank-choice-card";
-  card.innerHTML = `${backgroundMarkup(show)}<div class="show-meta">${titleMarkup(show)}${metadataMarkup(show)}</div><div class="rank-choice-card__action"><i data-lucide="chevron-right" aria-hidden="true"></i></div>`;
-  card.addEventListener("click", () => beginPlacement(show.id));
+  card.innerHTML = `${backgroundMarkup(show)}<div class="show-meta">${titleMarkup(show)}${metadataMarkup(show)}</div><button class="icon-button rank-choice-card__action" type="button" aria-label="Rank ${escapeAttribute(show.title)}"><i data-lucide="chevron-right" aria-hidden="true"></i></button>`;
+  card.querySelector("button").addEventListener("click", () => beginPlacement(show.id));
   wireInteractiveControls(card);
   return card;
 }
@@ -778,8 +778,18 @@ function bindPlacementGestures(stage) {
   stage.addEventListener("pointerup", finish);
   stage.addEventListener("pointercancel", finish);
   stage.addEventListener("wheel", (event) => {
+    const placement = appState.placement;
+    const mode = event.deltaMode;
+    if (!placement || event.ctrlKey || !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+    const unit = mode === 1 ? placementRowStep(stage) : mode === 2 ? stage.clientHeight : 1;
+    const distance = -event.deltaY * unit;
+    const atLimit = distance > 0 ? placement.insertIndex === 0 : placement.insertIndex === appState.ranked.length;
+    if (atLimit) {
+      settlePlacementLanes(stage);
+      return;
+    }
     event.preventDefault();
-    movePlacementBy(stage, -event.deltaY);
+    movePlacementBy(stage, distance);
     window.clearTimeout(appState.placementSnapTimer);
     appState.placementSnapTimer = window.setTimeout(() => settlePlacementLanes(stage), 200);
   }, { passive: false });
@@ -1365,18 +1375,7 @@ function formatShowSubtitle(show) {
 }
 
 function titleMarkup(show) {
-  const imdbId = show.imdbId || show.imdb_id;
-  const title = escapeHtml(show.title);
-  if (!imdbId) {
-    return `<p class="show-title" title="${escapeAttribute(show.title)}">${title}</p>`;
-  }
-  return `
-    <p class="show-title" title="${escapeAttribute(show.title)}">
-      <a class="show-title__link" href="https://www.imdb.com/title/${escapeAttribute(imdbId)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Open ${escapeAttribute(show.title || "show")} on IMDb">
-        ${title}
-      </a>
-    </p>
-  `;
+  return `<p class="show-title" title="${escapeAttribute(show.title)}">${escapeHtml(show.title)}</p>`;
 }
 
 function metadataMarkup(show) {
@@ -1389,7 +1388,7 @@ function metadataMarkup(show) {
     runtimeMinutes ? `Total Runtime: ${formatRuntime(runtimeMinutes)}` : ""
   ];
   const subtitles = rows.map((row) => `<p class="show-subtitle${row ? "" : " show-subtitle--placeholder"}">${row ? escapeHtml(row) : "&nbsp;"}</p>`);
-  return `<div class="show-details" tabindex="0" aria-label="Show details"><div class="show-summary" tabindex="0" aria-label="Year, seasons and episodes">${subtitles.slice(0, 2).join("")}</div>${subtitles[2]}</div>`;
+  return `<div class="show-details"><div class="show-summary">${subtitles.slice(0, 2).join("")}</div>${subtitles[2]}</div>`;
 }
 
 function ratingStarsMarkup(show) {

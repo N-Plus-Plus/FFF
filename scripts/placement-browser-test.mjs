@@ -25,7 +25,7 @@ await page.evaluate(() => {
 });
 await page.reload();
 await page.getByRole("tab", { name: "Rank" }).click();
-await page.locator("#panel-rank").getByText("Placement Show 7", { exact: true }).click();
+await page.locator("#panel-rank").getByRole("button", { name: "Rank Placement Show 7", exact: true }).click();
 await page.waitForTimeout(250);
 await page.addStyleTag({ content: ".placement-card { min-height: 214px; }" });
 
