@@ -75,10 +75,10 @@ The ignored root `.env.vars` is the local Google and fanart.tv configuration sou
 npm ci --ignore-scripts
 node cloudflare/scripts/prepare-assets.mjs
 npx.cmd wrangler d1 migrations apply DB --local --persist-to .wrangler/hosting-local
-npx.cmd wrangler dev --local --local-upstream 127.0.0.1:3000 --env-file .env.vars --port 3000 --var APP_ORIGIN:http://127.0.0.1:3000 --var LOCAL_DEMO:true --persist-to .wrangler/hosting-local --log-level warn
+npx.cmd wrangler dev --local --local-upstream 127.0.0.1:10140 --env-file .env.vars --port 10140 --var APP_ORIGIN:http://127.0.0.1:10140 --var LOCAL_DEMO:true --persist-to .wrangler/hosting-local --log-level warn
 ```
 
-Visit `http://127.0.0.1:3000/?demo=1` for synthetic local demo data. Demo mode is restricted to an explicitly enabled loopback origin; it is unavailable on production. Plain Python serving no longer represents authenticated hosting. Add the exact localhost origin to Google's authorised JavaScript origins for real local sign-in; use only separately approved synthetic local mappings. Do not copy production data into local tests.
+Visit `http://127.0.0.1:10140/?demo=1` for synthetic local demo data. Demo mode is restricted to an explicitly enabled loopback origin; it is unavailable on production. Plain Python serving no longer represents authenticated hosting. Add the exact localhost origin to Google's authorised JavaScript origins for real local sign-in; use only separately approved synthetic local mappings. Do not copy production data into local tests.
 
 Run:
 
@@ -99,3 +99,9 @@ See [cloudflare/DEPLOYMENT.md](cloudflare/DEPLOYMENT.md) for Google setup, opera
 `wrangler.jsonc` retains `0 2 * * 3` for weekly metadata refresh. The final deployment activates the reviewed metadata handler; live schedule registration is verified. Wednesday 02:00 UTC is 12:00 AEST / 13:00 AEDT in Sydney. No production scheduled event was invoked; the next scheduled execution, 14 October 2026, remains to be observed privately. Weekly outstanding-ranking reminder code and the queued fanart fix were deployed on 11 October 2026 in version `224c1e2f-6cb1-4913-96f2-8ef2750b8443`; reminders remain disabled. The registered additional `0 1 * * 3` event and Sydney timezone gate select Wednesday noon across DST, using native Cloudflare email and private D1 send claims. Run `npm run test:reminders` locally; production migration 0007, four verified destinations and explicit activation approval remain required. See [the reminder activation runbook](cloudflare/DEPLOYMENT.md#weekly-ranking-reminders--deployed-not-activated). Cloudflare is the sole backend authority. Retired Supabase repository tooling has been removed; hosted infrastructure is outside ordinary app operations.
 
 Production version `18d48994-4cc0-4a46-ba5e-00e4bb7c47b3` passed safe anonymous acceptance: DNS, trusted hostname certificate, Google button rendering, security headers, private-module/API/artwork denial, legacy authentication rejection and alternate URL closure. Four existing participants (one administrator), 33 shows, 41 nomination rows, 117 ranking rows and four unclaimed preapprovals were preserved exactly. All 48 R2 objects match their original keys, metadata and SHA-256 content hashes. Recovery artifacts remain private locally and in approved OneDrive storage. Each participant must still perform their own verified Google sign-in to check identity, role, retained personal data and session behaviour; no subjects were fabricated. See the deployment runbook for recovery and outstanding checks.
+
+## Local directory and listener contract
+
+Canonical checkout: `FFF`. Primary local default: **10140**. Service ID `fff`, repository name, display name and external data locations remain unchanged. Port configuration does not migrate browser origin storage or external OAuth allowlists; those require individual acceptance. Never terminate an unidentified listener to free a port.
+
+Local Wrangler inspector uses loopback 10143. Remote Worker/D1/R2/routes remain unchanged.

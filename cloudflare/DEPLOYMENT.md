@@ -118,7 +118,7 @@ The root `.env.vars` is ignored and contains local Google and fanart.tv configur
 ```powershell
 node cloudflare/scripts/prepare-assets.mjs
 npx.cmd wrangler d1 migrations apply DB --local --persist-to .wrangler/hosting-local
-npx.cmd wrangler dev --local --local-upstream 127.0.0.1:3000 --env-file .env.vars --port 3000 --var APP_ORIGIN:http://127.0.0.1:3000 --var LOCAL_DEMO:true --persist-to .wrangler/hosting-local --log-level warn
+npx.cmd wrangler dev --local --local-upstream 127.0.0.1:10140 --env-file .env.vars --port 10140 --var APP_ORIGIN:http://127.0.0.1:10140 --var LOCAL_DEMO:true --persist-to .wrangler/hosting-local --log-level warn
 ```
 
 Use the exact `127.0.0.1` origin above. `LOCAL_DEMO` works only on the explicitly configured loopback origin, never production. Real local sign-in additionally needs synthetic local mappings; automated tests mock Google and use disposable data. Do not use `--remote`, production snapshots, or real participant records in tests. Local HTTP uses a separately named cookie; production always uses `__Host-ww-session` with Secure, HttpOnly, Path=/, no Domain and SameSite=Lax.

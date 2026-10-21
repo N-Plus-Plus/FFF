@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 
-const origin = "http://127.0.0.1:3000";
+const origin = "http://127.0.0.1:10140";
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
