@@ -1,4 +1,4 @@
-import { chromium } from "@playwright/test";
+import { chromium } from "./global-playwright.cjs";
 import assert from "node:assert/strict";
 
 const browser = await chromium.launch();

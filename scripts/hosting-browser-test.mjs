@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chromium } from "@playwright/test";
+import { chromium } from "./global-playwright.cjs";
 
 const origin = "http://127.0.0.1:10140";
 const browser = await chromium.launch();

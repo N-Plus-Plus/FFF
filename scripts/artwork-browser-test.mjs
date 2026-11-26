@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { chromium, firefox } from '@playwright/test';
+import { chromium } from './global-playwright.cjs';
 
 // Only generated public assets and fictional API responses are served locally.
 const server = createServer(async (req, res) => {
@@ -16,7 +16,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const browser = await (process.env.UI_BROWSER === "firefox" ? firefox : chromium).launch(process.env.UI_FIREFOX_PATH ? {executablePath:process.env.UI_FIREFOX_PATH} : {});
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', error => errors.push(error.message));

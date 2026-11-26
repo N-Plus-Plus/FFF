@@ -1,5 +1,7 @@
 # Wire Wednesday
 
+Browser checks use the global npm installation of Playwright in headless Chromium. Use `npm install -g playwright` on a machine that lacks it and `playwright install chromium` to provision its browser cache.
+
 A mobile-first shared TV catalogue, private participant orders, and a strict aggregate watch sequence. The existing `fff-api` Worker serves [wirewednesday.nissen.nexus](https://wirewednesday.nissen.nexus) using Static Assets, existing D1 `fff`, and R2 `fff-artwork`. The authorised production cutover completed on 11 October 2026; real participant Google sign-in acceptance remains manual.
 
 ## Access and privacy

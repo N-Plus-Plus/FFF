@@ -1,6 +1,6 @@
 // Anonymous presentation review only. Local bytes + public GIS SDK; no real
 // participant sign-in, production API, Cloudflare account, or database access.
-import { chromium } from "@playwright/test";
+import { chromium } from "./global-playwright.cjs";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { parseEnv } from "node:util";
 import assert from "node:assert/strict";

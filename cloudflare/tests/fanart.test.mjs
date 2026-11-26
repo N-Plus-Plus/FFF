@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { chromium } from "@playwright/test";
+import { chromium } from "../../scripts/global-playwright.cjs";
 import { fixture } from "./fixture.mjs";
 import { mappingSql } from "../scripts/prepare-google-mapping.mjs";
 import { banners } from "../src/fanart.js";

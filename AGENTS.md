@@ -33,7 +33,7 @@ The project is an established static web app with live Cloudflare Worker hosting
 | Project maturity | Established static app with Cloudflare backend |
 | Application shape | Static HTML/CSS/JavaScript ES modules served by existing Cloudflare Worker Static Assets |
 | Languages and runtime | Browser JavaScript, HTML, CSS; no build step |
-| Frameworks and major libraries | Raw browser JS; Worker `jose` 6.2.12 verifies Google credentials; pinned Lucide 1.55.0 and Lexend Deca 5.3.0 packaged locally; Playwright/Wrangler development tools |
+| Frameworks and major libraries | Raw browser JS; Worker `jose` 6.2.12 verifies Google credentials; pinned Lucide 1.55.0 and Lexend Deca 5.3.0 packaged locally; global Playwright and project Wrangler development tools |
 | Package manager | npm, for development-only tooling |
 | Persistence or database | Cloudflare D1 (`fff`, Oceania) is the production store through Worker `fff-api`. Opt-in localStorage demo with `?demo=1` |
 | External services | Cloudflare Workers, D1, R2, and Cron Trigger; TVmaze primary television metadata, fanart.tv preferred banners |
@@ -327,7 +327,7 @@ Replace this table as commands become established. Verify commands from the curr
 
 | Purpose | Command |
 | --- | --- |
-| Install dependencies | `npm install`; install Chromium for browser verification with `npx playwright install chromium` |
+| Install dependencies | `npm install`; use global Playwright for browser verification (`npm install -g playwright` on a new machine, then `playwright install chromium`) |
 | Start development mode | `.\start-local-server.bat` starts local Wrangler using ignored `.env.vars`; exact loopback origin and demo URL printed by the script |
 | Build | `node cloudflare/scripts/prepare-assets.mjs` (public asset copying only; also run by Wrangler) |
 | Local Cloudflare checks | `node cloudflare/tests/hosting.test.mjs`; `node cloudflare/tests/auth-browser.test.mjs`; `node cloudflare/tests/preapproval.test.mjs`; `node cloudflare/tests/fanart.test.mjs`; `node cloudflare/tests/fanart-runtime.test.mjs`; `npm run test:reminders` (disposable D1 and native local email simulator); with local Wrangler running, `node scripts/hosting-browser-test.mjs` |
